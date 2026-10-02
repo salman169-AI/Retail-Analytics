@@ -145,6 +145,47 @@ class QueueConfig(BaseModel):
     recent: int = 10
 
 
+class StaffConfig(BaseModel):
+    """Area behind a counter where staff serve; see `analytics.staff`."""
+
+    name: str = "behind the counter"
+    polygon: list[tuple[int, int]]
+    # Box centre by default: the counter hides staff legs, so feet aren't visible.
+    anchor: str | None = "center"
+    # The queue whose waiting count the alert reports (first queue if None).
+    queue: str | None = None
+    # Alert once nobody has been behind the counter this long...
+    alert_after_s: float = 120.0
+    # ...while at least this many people are waiting in the queue.
+    min_waiting: int = 1
+    # Staff must be seen this long before the counter counts as staffed again,
+    # so one stray detection doesn't reset the timer.
+    back_after_s: float = 1.0
+    # Repeat the alert if the counter stays empty (0 = alert once per absence).
+    repeat_after_s: float = 300.0
+
+
+class EmailConfig(BaseModel):
+    """SMTP email alerts (free with a Gmail/Outlook account and an app password)."""
+
+    enabled: bool = False
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    username: str = ""
+    # The password is never stored in the config: it's read from this
+    # environment variable at send time.
+    password_env: str = "ALERT_SMTP_PASSWORD"
+    sender: str = ""
+    to: list[str] = Field(default_factory=list)
+
+
+class NotifyConfig(BaseModel):
+    email: EmailConfig = Field(default_factory=EmailConfig)
+    # Every alert is also written here as an .eml file, sent or not.
+    outbox_dir: str = "outputs/alerts"
+    site_name: str = "Cafe"
+
+
 class AnalyticsConfig(BaseModel):
     smoothing_window: int = 5
     heatmap: bool = True
@@ -171,7 +212,7 @@ class AnalyticsConfig(BaseModel):
     min_dwell_s: float = 0.0
     # Per-person "#id 12s" labels on the video. A wide crowd view with many
     # short tracks turns them into an unreadable pile; boxes alone still show.
-    show_labels: bool = True
+    show_labels: bool = False
 
 
 class PrivacyConfig(BaseModel):
@@ -199,6 +240,8 @@ class Config(BaseModel):
     lines: list[LineConfig] = Field(default_factory=list)
     doors: list[DoorConfig] = Field(default_factory=list)
     queues: list[QueueConfig] = Field(default_factory=list)
+    staff: StaffConfig | None = None
+    notify: NotifyConfig = Field(default_factory=NotifyConfig)
     analytics: AnalyticsConfig = Field(default_factory=AnalyticsConfig)
     privacy: PrivacyConfig = Field(default_factory=PrivacyConfig)
 

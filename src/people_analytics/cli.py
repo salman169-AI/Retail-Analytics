@@ -526,6 +526,63 @@ def composite(
     logger.info(f"-> {path} ({path.stat().st_size / 1e6:.1f} MB)")
 
 
+@app.command("zone-editor")
+def zone_editor(
+    config: str = typer.Option(..., help="Scene config to edit (zones, queue, staff area)."),
+    frame_s: float = typer.Option(None, help="Draw on this moment instead of the empty scene."),
+) -> None:
+    """Draw zones, the queue and the staff area by hand; W saves them into the config."""
+    from people_analytics.zone_editor import Editor, background, load_shapes
+
+    Editor(background(config, frame_s), load_shapes(config), Path(config)).run()
+
+
+@app.command("alerts")
+def alerts(
+    config: str = typer.Option(..., help="Scene config with a staff area."),
+    send: bool = typer.Option(False, help="Also send them (email if enabled in notify)."),
+) -> None:
+    """List the counter alerts in a run (replayed from its exports); optionally send them."""
+    import csv as _csv
+    import json
+
+    from people_analytics import notify
+
+    cfg = load_config(config)
+    stem = Path(cfg.io.source).stem
+    activity_csv = Path(cfg.io.output_dir) / "analytics" / f"{stem}_activity.csv"
+    if not activity_csv.exists():
+        logger.error(f"No event log at {activity_csv}: run `analyze` or `activity` first")
+        raise typer.Exit(code=1)
+    found = 0
+    with open(activity_csv, newline="", encoding="utf-8") as fh:
+        for r in _csv.DictReader(fh):
+            if r["event"] != "alert_no_staff":
+                continue
+            found += 1
+            from people_analytics.analytics.staff import StaffAlert
+
+            a = StaffAlert(int(r["frame"]), float(r["time_s"]), int(r["id"]),
+                           float(r["value_s"]), r["place"])
+            logger.warning(f"t={a.time_s:.0f}s  {a.message}")
+            if send:
+                res = notify.send(cfg.notify, *notify.alert_text(
+                    cfg.notify.site_name, a.message, a.time_s, stem), tag="no-staff")
+                logger.info(json.dumps(res))
+    logger.info(f"{found} alert(s) in {activity_csv.name}")
+
+
+@app.command("notify-test")
+def notify_test(config: str = typer.Option(..., help="Config with a notify section.")) -> None:
+    """Send a test alert email (and write it to the outbox) to check the settings."""
+    from people_analytics import notify
+
+    cfg = load_config(config)
+    res = notify.send(cfg.notify, f"[{cfg.notify.site_name}] Test alert",
+                      "This is a test of the counter alert email.", tag="test")
+    logger.info(res)
+
+
 @app.command("demo-video")
 def demo_video(
     config: str = typer.Option("configs/meva_demo.yaml", help="Shot list YAML."),

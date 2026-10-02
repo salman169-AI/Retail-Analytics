@@ -27,12 +27,15 @@ from people_analytics.analytics.queue import QueueMonitor
 from people_analytics.analytics.render import (
     ORANGE,
     YELLOW,
+    draw_alert_banner,
     draw_door,
     draw_queue,
+    draw_staff,
     draw_zones,
     pill,
     zone_color,
 )
+from people_analytics.analytics.staff import StaffMonitor, build_staff_monitor, waiting_count
 from people_analytics.config import Config
 
 CREDIT = "Video: MEVA dataset (mevadata.org), CC BY 4.0"
@@ -73,7 +76,8 @@ class SceneStats:
     def _upto(self, frame: int):
         return [e for e in self.events if e[0] <= frame]
 
-    def state(self, frame: int, queue: QueueMonitor | None) -> PanelState:
+    def state(self, frame: int, queue: QueueMonitor | None,
+              staff: StaffMonitor | None = None) -> PanelState:
         t = frame / self.fps
         ev = self._upto(frame)
         footer = [CREDIT]
@@ -117,9 +121,12 @@ class SceneStats:
         bars = {p: float(np.mean(v)) for p, v in done.items() if v}
         if queue is not None:
             wait = queue.wait_estimate_s
+            third = ("Visits so far", str(len(starts)))
+            if staff is not None:
+                m, sec = divmod(int(staff.unstaffed_s), 60)
+                third = ("Counter", "Staffed" if staff.staffed else f"Empty {m}:{sec:02d}")
             tiles = [("In queue now", str(queue.length)),
-                     ("Est. wait", "–" if wait is None else f"{wait:.0f} s"),
-                     ("Visits so far", str(len(starts)))]
+                     ("Est. wait", "–" if wait is None else f"{wait:.0f} s"), third]
         else:
             tiles = [("Visits so far", str(len(starts))),
                      ("Areas", str(len(self.cfg.zones))),
@@ -157,6 +164,9 @@ def iter_scene(
                                recent=q.recent)) for q in cfg.queues]
     zone_shapes = [(z.name, np.array(z.polygon, np.int32), zone_color(i))
                    for i, z in enumerate(cfg.zones)]
+    staff = build_staff_monitor(cfg, fps)
+    # An alert banner stays up for 8 s; once staff are back it turns "resolved".
+    alert_text, alert_until, resolved = "", -1, False
     start_f = int(start_s * fps) + 1
     end_f = total if seconds is None else min(total, start_f + int(seconds * fps) - 1)
     repeat = max(1, round(1 / speed))
@@ -175,7 +185,13 @@ def iter_scene(
                if rows else sv.Detections.empty())
         for _, qm in queues:
             qm.update(det)
-        if f < start_f:  # replay the queue from the clip start, but draw nothing yet
+        if staff is not None:
+            alert = staff.update(det, waiting_count(cfg, queues))
+            if alert is not None:
+                alert_text, alert_until, resolved = alert.message, f + int(8 * fps), False
+            if staff.staffed and f <= alert_until:
+                resolved = True
+        if f < start_f:  # replay from the clip start, but draw nothing yet
             continue
 
         queuing = {g for _, qm in queues for g in qm.queuing_ids}
@@ -188,8 +204,8 @@ def iter_scene(
                 col = None
             bgr = col.as_bgr() if col is not None else BOX
             cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), bgr,
-                          3 if col is not None else 2, cv2.LINE_AA)
-            if cfg.analytics.show_labels or (highlight and gid in highlight):
+                          2 if col is not None else 1, cv2.LINE_AA)
+            if cfg.analytics.show_labels:
                 pill(frame, f"#{gid}", (int(x1), int(y1) - 2), col or WHITE, size=17,
                      align="left")
 
@@ -207,9 +223,14 @@ def iter_scene(
             n_out = sum(1 for e in ev if e[1] == "door_out")
             img = draw_door(img, np.array(door_cfg.outer), np.array(door_cfg.inner),
                             f"{door_cfg.in_label} {n_in}   {door_cfg.out_label} {n_out}")
+        if staff is not None:
+            img = draw_staff(img, np.array(cfg.staff.polygon), cfg.staff.name,
+                             staff.staffed, staff.unstaffed_s)
+            if f <= alert_until:
+                img = draw_alert_banner(img, alert_text, resolved)
         if f / fps - panel_at >= panel_every_s:
             q = queues[0][1] if queues else None
-            panel = render_panel(stats.state(f, q), panel_size)
+            panel = render_panel(stats.state(f, q, staff), panel_size)
             panel_at = f / fps
         for _ in range(repeat):
             yield img, panel, f

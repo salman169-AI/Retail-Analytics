@@ -62,6 +62,33 @@ queues:
     min_visit_s: 3.0
     recent: 10
 
+# Behind the counter, where the server stands (box centre: the counter hides
+# their legs). Provisional: redraw with `people-analytics zone-editor`.
+staff:
+  name: "behind the counter"
+  polygon: [[0, 560], [160, 560], [280, 1072], [0, 1072]]
+  anchor: "center"
+  queue: "counter queue"
+  alert_after_s: 120      # alert after 2 minutes with no one at the counter...
+  min_waiting: 1          # ...while at least this many people are waiting
+  back_after_s: 1.0
+  repeat_after_s: 300
+
+# Alerts are always written to outbox_dir as .eml files. To email them too, set
+# enabled: true, fill in the addresses, and put an app password in the
+# ALERT_SMTP_PASSWORD environment variable (never in this file).
+notify:
+  site_name: "Cafe"
+  outbox_dir: "outputs/alerts"
+  email:
+    enabled: false
+    smtp_host: "smtp.gmail.com"
+    smtp_port: 587
+    username: ""
+    password_env: "ALERT_SMTP_PASSWORD"
+    sender: ""
+    to: []
+
 analytics:
   smoothing_window: 3
   heatmap: true

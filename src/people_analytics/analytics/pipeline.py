@@ -20,11 +20,13 @@ import numpy as np
 import supervision as sv
 from loguru import logger
 
+from people_analytics import notify
 from people_analytics.analytics.door import DoorCounter
 from people_analytics.analytics.dwell import DwellTracker
 from people_analytics.analytics.lines import DirectionalLineZone
 from people_analytics.analytics.queue import QueueMonitor
 from people_analytics.analytics.render import draw_door, draw_queue, draw_zones, zone_color
+from people_analytics.analytics.staff import build_staff_monitor, waiting_count
 from people_analytics.config import Config
 from people_analytics.detection import PersonDetector
 from people_analytics.io import frame_generator, get_video_info
@@ -193,8 +195,9 @@ def run_analytics(
         ))
         for q in cfg.queues
     ]
+    staff = build_staff_monitor(cfg, fps)
 
-    box = sv.BoxAnnotator(thickness=2)
+    box = sv.BoxAnnotator(thickness=1)
     label = sv.LabelAnnotator(
         text_scale=max(0.5, vinfo.width / 2400), text_position=sv.Position.TOP_CENTER
     )
@@ -261,6 +264,12 @@ def run_analytics(
                 })
         for _, qm in queues:
             qm.update(detections)
+        if staff is not None:
+            alert = staff.update(detections, waiting_count(cfg, queues))
+            if alert is not None:  # live: notify the moment it fires
+                logger.warning(f"ALERT t={alert.time_s:.0f}s: {alert.message}")
+                notify.send(cfg.notify, *notify.alert_text(
+                    cfg.notify.site_name, alert.message, alert.time_s, stem), tag="no-staff")
 
         # `sv.Detections.empty()` carries `tracker_id=None` rather than an empty
         # array, so every plain iteration over it raises on a frame the tracker
@@ -455,6 +464,17 @@ def run_analytics(
                 "min_visit_s": q.min_visit_s,
             }
             for q, qm in queues
+        },
+        "staff": None if staff is None else {
+            "area": cfg.staff.name,
+            "alert_after_s": cfg.staff.alert_after_s,
+            "min_waiting": cfg.staff.min_waiting,
+            "unstaffed_periods": sum(1 for _, on in staff.changes if not on),
+            "alerts": [
+                {"time_s": round(a.time_s, 2), "waiting": a.waiting,
+                 "unstaffed_s": round(a.unstaffed_s, 1), "message": a.message}
+                for a in staff.alerts
+            ],
         },
         "min_dwell_s": cfg.analytics.min_dwell_s,
         "privacy": {

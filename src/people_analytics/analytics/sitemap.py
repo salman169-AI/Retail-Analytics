@@ -19,6 +19,7 @@ only (its `owns` polygon), so the overlap isn't counted twice.
 from __future__ import annotations
 
 import csv
+import warnings
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -180,7 +181,8 @@ def clean_background(video: str, events: str, n: int = 60, pad: int = 12) -> np.
     for y0 in range(0, stack.shape[1], 120):
         chunk = stack[:, y0:y0 + 120].astype(np.float32)
         chunk[covered[:, y0:y0 + 120]] = np.nan
-        with np.errstate(all="ignore"):
+        with np.errstate(all="ignore"), warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)  # all-covered pixels: filled below
             med = np.nanmedian(chunk, axis=0)
         ok = ~np.isnan(med)
         out[y0:y0 + 120][ok] = med[ok].astype(np.uint8)

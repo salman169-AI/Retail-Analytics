@@ -33,7 +33,8 @@ BLUE, ORANGE, AQUA, YELLOW, MAGENTA = (
 # Zones take blue, magenta, yellow; orange is the queue's, aqua the door's.
 ZONE_PALETTE = [BLUE, MAGENTA, YELLOW]
 
-_FILL_ALPHA = 0.22
+_FILL_ALPHA = 0.10
+LINE = 2  # outline width at 1080p: thin, like a production overlay
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
 _FONT_DIR = os.path.join(matplotlib.get_data_path(), "fonts", "ttf")
 FONT_REGULAR = os.path.join(_FONT_DIR, "DejaVuSans.ttf")
@@ -74,7 +75,7 @@ def blit(frame: np.ndarray, rgba: np.ndarray, x: int, y: int) -> None:
 
 
 def pill(frame: np.ndarray, text: str, anchor: tuple[int, int], color: sv.Color,
-         size: int = 26, align: str = "center", bold: bool = True) -> tuple[int, int, int, int]:
+         size: int = 22, align: str = "center", bold: bool = True) -> tuple[int, int, int, int]:
     """Draw a rounded label; returns its box. `align`: center | left (anchor = left-middle)."""
     ink = _ink_for(color)
     rgba = _pill_rgba(text, size, (color.r, color.g, color.b), ink[::-1], bold)
@@ -117,7 +118,7 @@ def draw_zones(
     frame = cv2.addWeighted(wash, _FILL_ALPHA, frame, 1 - _FILL_ALPHA, 0)
 
     for name, polygon, color in zones:
-        cv2.polylines(frame, [polygon], True, color.as_bgr(), 3, cv2.LINE_AA)
+        cv2.polylines(frame, [polygon], True, color.as_bgr(), LINE, cv2.LINE_AA)
         centre = polygon.mean(axis=0).astype(int)
         _badge(frame, f"{name}  {counts.get(name, 0)}", tuple(centre), color)
     return frame
@@ -141,8 +142,8 @@ def draw_door(
     wash = frame.copy()
     cv2.fillPoly(wash, [band], DOOR_COLOR.as_bgr())
     frame = cv2.addWeighted(wash, _FILL_ALPHA * 0.6, frame, 1 - _FILL_ALPHA * 0.6, 0)
-    cv2.line(frame, tuple(outer[0]), tuple(outer[1]), DOOR_COLOR.as_bgr(), 4, cv2.LINE_AA)
-    cv2.line(frame, tuple(inner[0]), tuple(inner[1]), DOOR_COLOR.as_bgr(), 2, cv2.LINE_AA)
+    cv2.line(frame, tuple(outer[0]), tuple(outer[1]), DOOR_COLOR.as_bgr(), LINE, cv2.LINE_AA)
+    cv2.line(frame, tuple(inner[0]), tuple(inner[1]), DOOR_COLOR.as_bgr(), 1, cv2.LINE_AA)
     beyond = outer[1] + (outer[1] - outer[0]) * 0.3
     _badge(frame, text, tuple(beyond.astype(int)), DOOR_COLOR)
     return frame
@@ -154,7 +155,38 @@ def draw_queue(frame: np.ndarray, polygon: np.ndarray, text: str) -> np.ndarray:
     wash = frame.copy()
     cv2.fillPoly(wash, [polygon], QUEUE_COLOR.as_bgr())
     frame = cv2.addWeighted(wash, _FILL_ALPHA, frame, 1 - _FILL_ALPHA, 0)
-    cv2.polylines(frame, [polygon], True, QUEUE_COLOR.as_bgr(), 3, cv2.LINE_AA)
+    cv2.polylines(frame, [polygon], True, QUEUE_COLOR.as_bgr(), LINE, cv2.LINE_AA)
     top = polygon[np.argmin(polygon[:, 1])]
-    _badge(frame, text, (int(polygon[:, 0].mean()), int(top[1]) + 28), QUEUE_COLOR)
+    _badge(frame, text, (int(polygon[:, 0].mean()), int(top[1]) + 24), QUEUE_COLOR)
+    return frame
+
+
+STAFFED = AQUA
+ALERT = _hex("#d03b3b")  # the status "critical" red: reserved for alerts
+
+
+def draw_staff(frame: np.ndarray, polygon: np.ndarray, name: str, staffed: bool,
+               empty_s: float) -> np.ndarray:
+    """Staff area: thin outline (no wash, it's behind the counter) and a status label."""
+    polygon = np.asarray(polygon, dtype=np.int32)
+    color = STAFFED if staffed else ALERT
+    cv2.polylines(frame, [polygon], True, color.as_bgr(), LINE, cv2.LINE_AA)
+    if staffed:
+        text = "Counter staffed"
+    else:
+        m, s = divmod(int(empty_s), 60)
+        text = f"No one at the counter  {m}:{s:02d}"
+    top = polygon[np.argmin(polygon[:, 1])]
+    pill(frame, text, (int(top[0]) + 8, int(top[1]) - 20), color, align="left")
+    return frame
+
+
+def draw_alert_banner(frame: np.ndarray, text: str, resolved: bool = False) -> np.ndarray:
+    """Red banner across the top while an alert is active; aqua once it's resolved."""
+    h, w = frame.shape[:2]
+    if resolved:
+        pill(frame, "RESOLVED   Staff back at the counter", (w // 2, 46), STAFFED, size=28)
+        pill(frame, text, (w // 2, 96), ALERT, size=20)
+    else:
+        pill(frame, f"ALERT   {text}", (w // 2, 46), ALERT, size=28)
     return frame

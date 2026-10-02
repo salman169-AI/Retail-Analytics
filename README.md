@@ -1,21 +1,22 @@
 # People Counting, Dwell Time & Heatmaps with Occlusion-Robust Tracking
 
 Footfall analytics for any venue (shop, café, mall entrance, campus), shown on the
-public MEVA surveillance dataset: people counted in and out of a building entrance,
-a café queue with time per area, and four cameras combined on one floor plan as a
+public MEVA surveillance dataset: a café queue with wait estimate and time per area,
+an alert (with email) when customers wait at an unattended counter, people counted
+in and out of a building entrance, and four cameras combined on one floor plan as a
 heatmap with walking paths. Identities are held through crowds and occlusions,
 because every count and dwell time depends on that.
 
 **Video: MEVA dataset (mevadata.org), CC BY 4.0**
 
-![Site map: heat and walking paths from four cameras](outputs/portfolio/meva_thumbnail.jpg)
+![Cafe: queue, counter status and an unattended-counter alert](outputs/portfolio/meva_thumbnail.jpg)
 
-The 57-second demo video is built by `people-analytics demo-video`
+The 56-second demo video (café camera) is built by `people-analytics demo-video`
 (`outputs/meva/demo/meva_demo.mp4`, not tracked in git).
 
-| Entrance: IN/OUT at the doors | Café: queue and time per area |
+| Café: queue and time per area | The alert email |
 |---|---|
-| ![Entrance](outputs/portfolio/meva_entrance.jpg) | ![Cafe](outputs/portfolio/meva_cafe.jpg) |
+| ![Cafe](outputs/portfolio/meva_cafe.jpg) | ![Email](outputs/portfolio/meva_email.jpg) |
 
 ## What it does
 
@@ -24,7 +25,10 @@ The 57-second demo video is built by `people-analytics demo-video`
 | Door counting | East doors (MEVA G420) | Two lines across the doorway; a count needs the feet to cross both, in order, so a person standing on the threshold can't be counted twice |
 | Dwell time per area | Café (G421), gym (G330) | Time each tracked person spends in each floor area; visits under 3 s ignored |
 | Queue length and wait | Café counter | Slow-moving people in front of the counter; wait = median of recent visits |
-| Site-map heatmap | All four cameras | Each camera's floor mapped to metres, rooms placed on one plan, heat + walking paths |
+| Unattended-counter alert | Café counter | Nobody behind the counter for 2 minutes (configurable) while people wait: on-screen alert, event log entry and email |
+| Email notifications | Any site | Plain SMTP through an ordinary mail account (Gmail, Outlook…), so no paid service; every alert is also saved as an `.eml` file |
+| Zone editor | Any camera | Draw areas, the queue and the staff area on the scene by clicking; saved into the config |
+| Site-map heatmap | All four cameras | Each camera's floor mapped to metres, rooms placed on one plan, heat + walking paths ([still](outputs/portfolio/meva_site_heatmap.jpg)) |
 | Stats panel | Beside the video | Footfall per minute, running totals, average visit by area (matplotlib) |
 
 ## Results
@@ -83,6 +87,10 @@ flowchart LR
 - **Door counter** ([`analytics/door.py`](src/people_analytics/analytics/door.py)):
   outer and inner line; crossings need both lines in order, a short settle time
   and a 1 s cooldown, which stops shuffling and crowd overlap counting twice.
+- **Counter staff monitor** ([`analytics/staff.py`](src/people_analytics/analytics/staff.py)):
+  someone's box centre inside the area behind the counter means it's staffed (the
+  counter hides legs, so feet aren't used). The state only flips after holding for
+  a second, so a missed detection or a passer-by doesn't count.
 - **Floor mapping** ([`analytics/floor.py`](src/people_analytics/analytics/floor.py)):
   the gym uses MEVA's calibrated camera models; the café is fitted from its
   12-inch floor tiles; the entrance from its two 4×6 ft mats. Checks in
@@ -114,6 +122,13 @@ people-analytics analyze --config configs/meva_cafe.yaml --no-video
 people-analytics analyze --config configs/meva_gym.yaml --no-video
 people-analytics analyze --config configs/meva_gym_g299.yaml --no-video
 
+# Draw your own zones, queue and staff area (opens a window; W saves, H help)
+people-analytics zone-editor --config configs/meva_cafe.yaml
+
+# Alerts: list them from a run, send them, or test the email settings
+people-analytics alerts --config configs/meva_cafe.yaml [--send]
+people-analytics notify-test --config configs/meva_cafe.yaml
+
 # Site map, evaluation, video
 people-analytics sitemap            # -> outputs/meva/sitemap/site_heatmap.png
 people-analytics meva-eval-doors    # -> metrics/meva_doors_eval.json
@@ -122,12 +137,25 @@ people-analytics composite --config configs/meva_cafe.yaml --title Cafe --second
 people-analytics demo-video         # -> outputs/meva/demo/meva_demo.mp4
 ```
 
+### Email alerts
+
+Alerts always go to `notify.outbox_dir` as `.eml` files. To email them as well, set
+`notify.email` in the scene config (`enabled: true`, `username`, `sender`, `to`) and put
+an app password in the `ALERT_SMTP_PASSWORD` environment variable; the password is
+never stored in a file. For Gmail: turn on 2-step verification, create an app password
+at myaccount.google.com/apppasswords, and keep `smtp.gmail.com`, port 587. Then run
+`people-analytics notify-test` to check it.
+
 The KF1 metadata zip (camera list, site-map PDF) comes from
 [data.kitware.com](https://data.kitware.com/#item/5ce40a518d777f072bc1e920); see
 [`data/README.md`](data/README.md).
 
 ## Limits
 
+- **The unattended-counter alert has no real 2-minute case in MEVA.** The café is
+  staffed whenever it is open (99% of frames in the demo clip; the longest gap is
+  2 s), so the demo shows the alert on that real 2-second gap with the threshold
+  lowered to 1.5 s, and says so on screen.
 - **Long stays are under-timed** in crowds (see Results). Short visits are accurate.
 - **The floor plan is schematic.** MEVA has no building plan: each room's floor is
   measured, but where the rooms sit relative to each other is approximate, and each
@@ -145,11 +173,13 @@ The KF1 metadata zip (camera list, site-map PDF) comes from
 ```
 configs/meva_*.yaml          scene configs (doors, zones, queue, tracker), site plan, demo shots
 src/people_analytics/
-  analytics/                 pipeline, door, queue, dwell, activity log, floor, sitemap, panel
+  analytics/                 pipeline, door, queue, staff, dwell, activity log, floor, sitemap, panel
   data/meva.py               MEVA clip ranking, download, annotations
   tracking/                  BoxMOT wrapper, per-clip tuning harness
   eval/                      MEVA door and dwell evaluation
   demo.py                    demo video from a shot list
+  zone_editor.py             draw zones / queue / staff area and save to a config
+  notify.py                  email alerts (SMTP) and the .eml outbox
 metrics/                     tuning, floor calibration, evaluation (all from runs here)
 outputs/portfolio/meva_*     README stills (tracked); other outputs are gitignored
 ```

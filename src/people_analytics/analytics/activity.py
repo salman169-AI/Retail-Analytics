@@ -8,6 +8,10 @@ run without tracking again, and always agrees with the run's summary.
 Rows: `time_s, frame, event, id, place, value_s`, where `event` is one of
 door_in, door_out, zone_enter, zone_exit, queue_join, queue_leave, and `value_s`
 is the visit length on zone_exit / queue_leave (dwell, time in queue).
+
+With a staff area configured there are also counter events: `counter_empty` and
+`counter_staffed` (no id), and `alert_no_staff`, where `id` is the number of
+people waiting and `value_s` how long the counter had been empty.
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ import supervision as sv
 
 from people_analytics.analytics.door import DoorCounter
 from people_analytics.analytics.queue import QueueMonitor
+from people_analytics.analytics.staff import build_staff_monitor, waiting_count
 from people_analytics.config import Config
 
 FIELDS = ["time_s", "frame", "event", "id", "place", "value_s"]
@@ -84,7 +89,9 @@ def build_activity(
                                max_speed=q.max_speed, min_visit_s=q.min_visit_s,
                                recent=q.recent)) for q in cfg.queues]
 
-    def row(frame: int, event: str, gid: int, place: str, value: float | None = None) -> dict:
+    staff = build_staff_monitor(cfg, fps)
+
+    def row(frame: int, event: str, gid, place: str, value: float | None = None) -> dict:
         return {"time_s": round(frame / fps, 2), "frame": frame, "event": event, "id": gid,
                 "place": place, "value_s": "" if value is None else round(value, 2)}
 
@@ -96,6 +103,16 @@ def build_activity(
                 rows.append(row(f, f"door_{ev.direction}", ev.tracker_id, d.name))
         for _, qm in queues:
             qm.update(det)
+        if staff is not None:
+            alert = staff.update(det, waiting_count(cfg, queues))
+            if alert is not None:
+                rows.append(row(f, "alert_no_staff", alert.waiting, cfg.staff.name,
+                                alert.unstaffed_s))
+    if staff is not None:
+        for frame, staffed in staff.changes:  # monitor frames count from 1
+            rows.append(row(first_frame + frame - 1,
+                            "counter_staffed" if staffed else "counter_empty", "",
+                            cfg.staff.name))
     for q, qm in queues:
         qm.finish()
         for gid, first, last in qm.visit_log:  # monitor frames count from 1
@@ -110,7 +127,7 @@ def build_activity(
                 continue
             rows.append(row(a, "zone_enter", gid, zone))
             rows.append(row(b, "zone_exit", gid, zone, (b - a + 1) / fps))
-    return sorted(rows, key=lambda r: (r["frame"], r["event"], r["id"]))
+    return sorted(rows, key=lambda r: (r["frame"], r["event"], str(r["id"])))
 
 
 def write_activity(rows: list[dict], path: str | Path) -> Path:

@@ -90,8 +90,17 @@ def _caption_band(canvas: np.ndarray, x: int, y: int, w: int, caption: str, sub:
 # --- shots ---------------------------------------------------------------------
 
 
-def shot_scene(shot: dict, fps: float):
+def _config(shot: dict):
+    """Load the shot's config and apply its `overrides` ({"staff.alert_after_s": 1.5})."""
     cfg = load_config(shot["config"])
+    for dotted, value in (shot.get("overrides") or {}).items():
+        section, key = dotted.split(".")
+        setattr(getattr(cfg, section), key, value)
+    return cfg
+
+
+def shot_scene(shot: dict, fps: float):
+    cfg = _config(shot)
     caption_y = int(VIDEO_W * 9 / 16)  # 810
     for img, panel, _ in iter_scene(cfg, shot["title"], shot["start_s"], shot["seconds"],
                                     speed=shot.get("speed", 1.0), panel_size=(PANEL_W, H),
@@ -192,11 +201,18 @@ def shot_summary(shot: dict, fps: float):
             if len(ranked) >= 2:
                 (a, va), (b, vb) = ranked[:2]
                 notes.append(f"Longest average stay: {a} ({va:.0f} s), then {b} ({vb:.0f} s).")
+        if cfg.queues:
+            stem = Path(cfg.io.source).stem
+            summary = json.loads((Path(cfg.io.output_dir) / "analytics" / f"{stem}_summary.json")
+                                 .read_text(encoding="utf-8"))
+            q = summary["queues"].get(cfg.queues[0].name, {})
+            if q:
+                notes.append(f"Most people queueing at once: {q['peak_length']}; "
+                             f"{q['visits']} queue visits in 5 minutes.")
+    x = len(shot["panels"]) * PANEL_W + 70
     _text(canvas, [(shot["caption"], 52, INK, True),
-                   ("Foot traffic per minute, running totals and average time per area, "
-                    "for each full 5-minute clip.", 30, INK_2, False)]
-          + [(n, 30, INK, False) for n in notes], 2 * PANEL_W + 70, 140, gap=26,
-          max_w=W - 2 * PANEL_W - 140)
+                   (shot.get("sub", "Totals for the full 5-minute clip."), 30, INK_2, False)]
+          + [(n, 30, INK, False) for n in notes], x, 140, gap=26, max_w=W - x - 70)
     for _ in range(int(shot["seconds"] * fps)):
         yield canvas
 
@@ -212,25 +228,28 @@ def _metrics() -> dict:
 
 
 def shot_measured(shot: dict, fps: float):
+    """Results card; `items` picks rows: cafe_idsw, entrance_idsw, doors."""
     m = _metrics()
     d = m["doors"]
-    labels = d["in"]["labels"] + d["out"]["labels"]
-    matched = d["in"]["matched"] + d["out"]["matched"]
-    false = d["in"]["false_counts"] + d["out"]["false_counts"]
-    (cafe_ours, cafe_bt), (ent_ours, ent_bt) = m["idsw"]["cafe"], m["idsw"]["entrance"]
+    rows = {
+        "doors": ("Door counting",
+                  f"{d['in']['matched'] + d['out']['matched']} of "
+                  f"{d['in']['labels'] + d['out']['labels']}",
+                  f"labelled entries and exits found, "
+                  f"{d['in']['false_counts'] + d['out']['false_counts']} false counts"),
+    }
+    for scene, place in (("cafe", "this cafe clip"), ("entrance", "the entrance clip")):
+        ours, bt = m["idsw"][scene]
+        rows[f"{scene}_idsw"] = ("Tracking people through a crowd", f"{1 - ours / bt:.0%} fewer",
+                                 f"identity switches than ByteTrack in {place} "
+                                 f"({ours} vs {bt}, full 5 minutes)")
     canvas = _blank()
-    y = _text(canvas, [("Measured on clips the system was not tuned on", 52, INK, True),
+    y = _text(canvas, [("Measured on footage the system was not tuned on", 52, INK, True),
                        ("Ground truth: MEVA's own annotations", 30, INK_2, False)], 140, 150,
               gap=20)
     y += 50
-    rows = [
-        ("Door counting", f"{matched} of {labels}",
-         f"labelled entries and exits found, {false} false counts"),
-        ("Tracking in crowds", f"{1 - cafe_ours / cafe_bt:.0%} fewer",
-         f"ID switches than ByteTrack in the cafe ({cafe_ours} vs {cafe_bt}), "
-         f"{1 - ent_ours / ent_bt:.0%} fewer at the doors ({ent_ours} vs {ent_bt})"),
-    ]
-    for label, big, rest in rows:
+    for key in shot.get("items", ["doors", "cafe_idsw", "entrance_idsw"]):
+        label, big, rest = rows[key]
         _text(canvas, [(label, 30, INK_2, False)], 140, y)
         _text(canvas, [(big, 64, INK, True)], 140, y + 44)
         _text(canvas, [(rest, 32, INK_2, False)], 620, y + 62, max_w=W - 760)
@@ -242,10 +261,45 @@ def shot_measured(shot: dict, fps: float):
         yield canvas
 
 
+def shot_email(shot: dict, fps: float):
+    """The alert email the run generates, shown as a message card."""
+    from people_analytics import notify
+    from people_analytics.analytics.activity import build_activity
+    from people_analytics.analytics.staff import StaffAlert
+
+    cfg = _config(shot)
+    stem = Path(cfg.io.source).stem
+    _, _, cfps, total = _load(cfg)
+    events = Path(cfg.io.output_dir) / "analytics" / f"{stem}_events.csv"
+    rows = [r for r in build_activity(cfg, events, cfps, 1, total)
+            if r["event"] == "alert_no_staff"]
+    if not rows:
+        raise ValueError("No staff alert in this clip with these settings")
+    r = rows[0]
+    alert = StaffAlert(r["frame"], r["time_s"], r["id"], r["value_s"], cfg.staff.name)
+    subject, body = notify.alert_text(cfg.notify.site_name, alert.message, alert.time_s,
+                                      "cafe camera")
+    canvas = _blank()
+    _text(canvas, [(shot["caption"], 52, INK, True), (shot["sub"], 30, INK_2, False)],
+          140, 110, gap=14, max_w=W - 280)
+    x0, y0, x1, y1 = 140, 330, W - 140, 900
+    cv2.rectangle(canvas, (x0, y0), (x1, y1), (44, 44, 44), -1)
+    cv2.rectangle(canvas, (x0, y0), (x1, y0 + 8), ACCENT, -1)
+    y = _text(canvas, [("From: Cafe camera alerts", 26, INK_2, False),
+                       ("To: Cafe manager", 26, INK_2, False),
+                       (f"Subject: {subject}", 30, INK, True)], x0 + 40, y0 + 40, gap=8)
+    cv2.line(canvas, (x0 + 40, y + 10), (x1 - 40, y + 10), (70, 70, 70), 1)
+    _text(canvas, [(ln, 28, INK, False) for ln in body.splitlines() if ln.strip()],
+          x0 + 40, y + 40, gap=10, max_w=x1 - x0 - 80)
+    for _ in range(int(shot["seconds"] * fps)):
+        yield canvas
+
+
 def shot_end(shot: dict, fps: float, author: str):
     canvas = _blank()
-    _text(canvas, [("People counting, dwell time & heatmaps", 60, INK, True),
-                   ("with occlusion-robust tracking", 60, INK, True)], 140, 300, gap=4)
+    title = shot.get("title", ["People counting, dwell time & heatmaps",
+                               "with occlusion-robust tracking"])
+    _text(canvas, [(line, 60, INK, True) for line in title], 140, 300, gap=4)
     _text(canvas, [("Personal demo on the MEVA dataset (CC BY 4.0)", 36, INK_2, False),
                    (author, 36, INK, True),
                    (CREDIT, 26, MUTED, False)], 140, 560, gap=22)
@@ -278,29 +332,33 @@ def build_demo(config: str | Path) -> dict:
     fps = float(spec.get("fps", 30))
     out = FFmpegWriter(spec["out"], (W, H), fps, crf=22)
     thumb = None
+    # Thumbnail: [shot index, seconds into that shot] (raw frame, before any fade).
+    t_shot, t_sec = spec.get("thumbnail_at", [0, 0.0])
     durations = []
-    for shot in spec["shots"]:
+    for idx, shot in enumerate(spec["shots"]):
         kind = shot["kind"]
         gen = {
             "scene": lambda s=shot: shot_scene(s, fps),
             "sitemap": lambda s=shot: shot_sitemap(s, fps),
             "summary": lambda s=shot: shot_summary(s, fps),
             "measured": lambda s=shot: shot_measured(s, fps),
+            "email": lambda s=shot: shot_email(s, fps),
             "end": lambda s=shot: shot_end(s, fps, spec.get("author", "")),
         }[kind]()
-        last_raw: list[np.ndarray] = []
+        grab: list[np.ndarray] = []
 
-        def keep_last(frames, holder=last_raw):
-            for fr in frames:
-                holder[:] = [fr]
+        def capture(frames, want=int(t_sec * fps) if idx == t_shot else -1, holder=grab):
+            for i, fr in enumerate(frames):
+                if i == want:
+                    holder.append(fr.copy())
                 yield fr
 
         n = 0
-        for frame in _with_fades(keep_last(gen)):
+        for frame in _with_fades(capture(gen)):
             out.write(frame)
             n += 1
-        if kind == "sitemap" and last_raw:
-            thumb = last_raw[0]  # the full map, before the fade-out
+        if grab:
+            thumb = grab[0]
         durations.append((kind, round(n / fps, 2)))
         logger.info(f"{kind}: {n / fps:.1f} s")
     path = out.close()
