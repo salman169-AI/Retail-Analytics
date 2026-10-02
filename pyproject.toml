@@ -1,0 +1,80 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "people-analytics"
+version = "0.1.0"
+description = "People counting + per-zone dwell-time + occupancy heatmap with occlusion-robust Re-ID."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Salman Majeed" }]
+keywords = ["computer-vision", "tracking", "re-id", "people-counting", "dwell-time"]
+
+# Core (light) dependencies — enough to scaffold, configure, read video, and run analytics.
+# Heavy ML stacks live in optional groups below and get installed in later phases.
+dependencies = [
+    "numpy>=1.26",
+    "opencv-python>=4.9",
+    "pyyaml>=6.0",
+    "pydantic>=2.6",
+    "supervision>=0.26",
+    "typer>=0.12",
+    "loguru>=0.7",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+# Detection stack (Phase 2)
+detect = [
+    "ultralytics>=8.3",
+]
+# Tracking + appearance Re-ID stack (Phase 3-4).
+# NOTE: install torch/torchvision from the CUDA index for the RTX 3080, e.g.
+#   uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+track = [
+    "boxmot>=11.0",
+    "torch>=2.2",
+    "torchvision>=0.17",
+]
+# Demo app (Phase 8)
+app = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9",
+    "streamlit>=1.33",
+]
+# Evaluation (Phase 7).
+# NOTE: TrackEval (HOTA) is not on PyPI and a direct git reference here breaks the
+# build backend, so install it separately after this group:
+#   uv pip install "git+https://github.com/JonathonLuiten/TrackEval.git"
+eval = [
+    "motmetrics>=1.4",
+    "matplotlib>=3.8",
+    "pandas>=2.2",
+]
+# Edge export + FPS benchmarking (Phase 9)
+edge = [
+    "onnx>=1.16",
+    "onnxruntime-gpu>=1.17",
+    "onnxslim>=0.1",
+]
+dev = [
+    "ruff>=0.4",
+]
+
+[project.scripts]
+people-analytics = "people_analytics.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/people_analytics"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = []

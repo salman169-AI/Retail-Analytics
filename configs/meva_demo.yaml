@@ -1,0 +1,59 @@
+# ~60 s portfolio demo (phase 5): `people-analytics demo-video`.
+# Every shot <= 15 s and captioned (most viewers watch muted). All numbers on
+# screen come from this repo's runs: live counts from the run exports, the
+# measured card from metrics/*.json.
+# Video: MEVA dataset (mevadata.org), CC BY 4.0
+
+out: "outputs/meva/demo/meva_demo.mp4"
+thumbnail: "outputs/meva/demo/thumbnail.png"
+author: "Salman Majeed"
+fps: 30
+
+shots:
+  - kind: sitemap
+    seconds: 5
+    config: "configs/meva_sitemap.yaml"
+    px_per_m: 32          # sharper than the 20 px/m still; the map is cropped to fit
+    caption: "Four cameras, three rooms, one floor plan"
+    sub: "Five minutes of foot traffic per room, played in five seconds"
+
+  - kind: scene
+    config: "configs/meva_entrance.yaml"
+    title: "East doors"
+    start_s: 57
+    seconds: 9
+    caption: "Counting people at a building entrance"
+    sub: "A crossing counts only when the feet pass both lines, in order"
+
+  # Annotation-checked: each of these three people is matched to the same id
+  # before and after they pass behind each other (outputs/meva/phase5).
+  - kind: scene
+    config: "configs/meva_entrance.yaml"
+    title: "East doors"
+    start_s: 66
+    seconds: 3.5
+    speed: 0.5
+    highlight: [35, 37, 57]
+    caption: "Slowed down: people pass behind each other"
+    sub: "#35, #37 and #57 keep their IDs through the crowd"
+
+  - kind: scene
+    config: "configs/meva_cafe.yaml"
+    title: "Cafe"
+    start_s: 50
+    seconds: 14
+    caption: "Cafe queue and time spent per area"
+    sub: "People waiting now, a wait estimate from recent visits, visitors per area"
+
+  - kind: summary
+    seconds: 8
+    panels:
+      - {config: "configs/meva_entrance.yaml", title: "East doors"}
+      - {config: "configs/meva_cafe.yaml", title: "Cafe"}
+    caption: "End-of-clip summary"
+
+  - kind: measured
+    seconds: 8
+
+  - kind: end
+    seconds: 6

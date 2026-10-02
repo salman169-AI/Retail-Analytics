@@ -1,0 +1,86 @@
+# Site plan for the combined heatmap (phase 3).
+# Video: MEVA dataset (mevadata.org), CC BY 4.0
+#
+# Schematic: each room's floor is measured (metres) from its camera(s); where
+# the rooms sit relative to each other follows the MEVA KF1 site map, which only
+# marks the cafe north of the gym and the east doors beside it. Placement is
+# approximate; distances *within* a room are measured.
+#
+# Each room shows its own 5-minute demo clip (different times), not one moment.
+
+cache_dir: "outputs/meva/sitemap"
+
+plan:
+  px_per_m: 20   # canvas is sized to the rooms automatically
+
+rooms:
+  # Gym camera frame: origin at centre court, x along the court, z=0 floor.
+  # Outline = the playing floor up to the bleachers, read off the top-down
+  # warps (outputs/meva/phase3/top_gym_*.jpg).
+  - name: "gym"
+    label: "Gym  -  G299 + G330, 2018-03-09 10:15"
+    outline: [[-16, -9.5], [16, -9.5], [16, 9.5], [-16, 9.5]]
+    rotate_deg: 0
+    offset: [30, 21]
+
+  # Tile frame (12-inch tiles): glass door wall at y ~ +4, counter at y ~ -2.
+  # Least reliable far left (lounge), away from the fitted tiles: no lens model.
+  - name: "cafe"
+    label: "Cafe  -  G421, 2018-03-07 17:20"
+    outline: [[-9.5, -3], [2, -3], [2, 4.3], [-9.5, 4.3]]
+    rotate_deg: 0
+    offset: [33.75, 36.5]
+
+  # Mat frame: door wall at y ~ -0.3, lobby towards +y, stairs beyond y ~ 2.4.
+  # Rotated so the exterior doors face east (right), as on the site map.
+  - name: "lobby"
+    label: "East doors  -  G420, 2018-03-09 10:40"
+    outline: [[-4.4, -0.4], [1.4, -0.4], [1.4, 2.4], [-4.4, 2.4]]
+    rotate_deg: 90
+    offset: [49.4, 18]
+
+cameras:
+  - name: "G330"
+    room: "gym"
+    video: "data/meva/clips/2018-03-09.10-15-00.10-20-00.school.G330.r13.avi"
+    events: "outputs/meva/analytics/2018-03-09.10-15-00.10-20-00.school.G330.r13_events.csv"
+    floor:
+      method: "krtd"
+      krtd: "data/meva/meva-data-repo/metadata/camera-models/krtd/2018-03-16.08-31-36.08-35-00.school.G330.krtd"
+    # Everything except the near-left quarter, which G299 sees better.
+    owns: [[-16, 0], [2, 0], [2, -9.5], [16, -9.5], [16, 9.5], [-16, 9.5]]
+
+  - name: "G299"
+    room: "gym"
+    video: "data/meva/clips/2018-03-09.10-15-00.10-20-00.school.G299.r13.avi"
+    events: "outputs/meva/analytics/2018-03-09.10-15-00.10-20-00.school.G299.r13_events.csv"
+    floor:
+      method: "krtd"
+      krtd: "data/meva/meva-data-repo/metadata/camera-models/krtd/2018-03-15.08-34-31.08-35-00.school.G299.krtd"
+    # G299 sits at (-16, -11.5): the floor half nearest it, up to x = 2.
+    owns: [[-16, -9.5], [2, -9.5], [2, 0], [-16, 0]]
+
+  - name: "G421"
+    room: "cafe"
+    video: "data/meva/clips/2018-03-07.17-20-00.17-25-00.school.G421.r13.avi"
+    events: "outputs/meva/analytics/2018-03-07.17-20-00.17-25-00.school.G421.r13_events.csv"
+    floor:
+      method: "tiles"
+      roi: [1120, 480, 1700, 800]          # clean tiles right of the tables
+      line_angles: [[15, 32], [150, 172]]  # image angle of each grout-line family
+      # 12-inch tiles: the 6 ft glass double door measures 6.09 tiles.
+      tile_m: 0.3048
+
+  - name: "G420"
+    room: "lobby"
+    video: "data/meva/clips/2018-03-09.10-40-01.10-45-01.school.G420.r13.avi"
+    events: "outputs/meva/analytics/2018-03-09.10-40-01.10-45-01.school.G420.r13_events.csv"
+    floor:
+      method: "mats"
+      # Two mats, each [wall-left, wall-right, room-right, room-left] (pixels).
+      corners: [[798, 713], [1048, 795], [961, 895], [687, 795],
+                [1097, 770], [1408, 872], [1337, 1010], [973, 887]]
+      # 4x6 ft mats: the fit gives depth/width 0.59 (4x6 = 0.67) and the left
+      # 6 ft double door measures 0.98 mat widths.
+      mat_width_m: 1.83
+      principal_point: [959.5, 535.5]

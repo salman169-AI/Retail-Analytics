@@ -1,0 +1,76 @@
+# Default configuration for the people-analytics pipeline.
+# Everything is config-driven: model sizes, tracker choice, thresholds,
+# zone polygons, line coordinates, and the privacy toggle.
+
+io:
+  # Path to the input video. Relative paths resolve from the repo root.
+  # people-walking = fixed overhead concourse (1920x1080) — the analytics demo clip.
+  source: "data/samples/people-walking.mp4"
+  # Where annotated video / exports are written.
+  output_dir: "outputs"
+  # Optional cap on frames processed (null = whole clip). Useful for quick runs.
+  max_frames: null
+
+eval:
+  # Labeled MOT-format sequence used as IDSW ground truth (Phase 1 / Phase 7).
+  sequence_dir: "data/eval/MOT20-01"
+
+detector:
+  # Ultralytics YOLO26 weights. yolo26m = accuracy, yolo26n = edge.
+  model: "yolo26m.pt"
+  weights_dir: "weights"    # auto-downloaded weights are cached here
+  device: "cuda:0"          # "cuda:0" | "cpu"
+  confidence: 0.3
+  iou: 0.7
+  # Restrict to the COCO "person" class (id 0).
+  classes: [0]
+  # Optional tiled inference for dense/overhead scenes (Phase 2.2).
+  slicer:
+    enabled: false
+    slice_wh: [640, 640]
+    overlap_ratio: 0.2
+
+tracker:
+  # One of: botsort | deepocsort | boosttrack | bytetrack
+  name: "botsort"
+  # Appearance model (boxmot auto-download): osnet_ain (accuracy) | lmbn | osnet.
+  # NOTE: CLIP-ReID isn't available in boxmot 19.0.0. lmbn (LightMBN) is the
+  # benchmark-selected winner on MOT20-01 (see RESULTS.md); osnet_ain is the
+  # strongest accuracy option. Use bytetrack for a motion-only run.
+  reid_model: "lmbn"
+  track_buffer: 60          # frames a lost track is kept alive
+  appearance_thresh: 0.25
+  match_thresh: 0.8
+
+reid_gallery:
+  # Long-term re-entry gallery (Phase 4).
+  enabled: true
+  cosine_thresh: 0.55       # min cosine similarity to re-assign an old global_id
+  time_window_s: 120        # how long a departed identity stays matchable
+  max_gallery_size: 500
+  ema_alpha: 0.9            # running-embedding smoothing (higher = slower to change)
+
+zones:
+  # Named PolygonZones for dwell time (people-walking, 1920x1080 overhead).
+  # Coordinates are [x, y] in pixels; dwell triggers on each person's feet.
+  - name: "waiting_area"      # left cluster where groups tend to stand
+    polygon: [[250, 420], [580, 420], [580, 720], [250, 720]]
+  - name: "main_concourse"    # central walking area
+    polygon: [[650, 340], [1280, 340], [1280, 800], [650, 800]]
+
+lines:
+  # Full-width horizontal counting line (entry/exit + occupancy). Spans the whole
+  # frame [0..1920] so anyone crossing — including at the corners — is counted.
+  - name: "concourse_crossing"
+    start: [0, 600]
+    end: [1920, 600]
+
+analytics:
+  smoothing_window: 5       # DetectionsSmoother length
+  heatmap: true
+  anchor: "center"          # zone/line presence tested at box center | bottom_center | top_center
+
+privacy:
+  # Face/person anonymization toggle (Phase 6).
+  enabled: false
+  method: "blur"            # blur | pixelate

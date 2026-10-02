@@ -1,0 +1,115 @@
+# Eye-level shopping-street scene (data/samples/street_scene.mp4, 1920x1080).
+# People are large/close to the camera — the Re-ID + re-entry gallery shine here.
+
+io:
+  source: "data/samples/street_scene.mp4"
+  output_dir: "outputs"
+  max_frames: null
+
+eval:
+  sequence_dir: "data/eval/MOT20-01"
+
+detector:
+  model: "yolo26m.pt"
+  weights_dir: "weights"
+  device: "cuda:0"
+  confidence: 0.25
+  iou: 0.7
+  classes: [0]
+  # Tiled inference. People inside the station arch are only a few dozen pixels
+  # tall and the whole-frame pass simply never proposes them (measured: 0-2 in
+  # the arch untiled vs 3-4 tiled, at any confidence). Tiling runs the detector
+  # on 640px crops at native resolution, which is what recovers them.
+  slicer:
+    enabled: true
+    slice_wh: [640, 640]
+    overlap_ratio: 0.2
+    # Foreground people here are taller than a 640px tile. Pure IoU merging left
+    # one person wearing 3-4 boxes. IoS@0.6 removed *nested* halves but still
+    # kept offset upper/lower splits cut at the tile seam (y≈640): IoS ~0.5–0.58
+    # with low IoU, so one person still got two track IDs (full body + torso).
+    # Fix: IoS@0.45 on the slicer *plus* hybrid full-frame fusion — keep every
+    # whole-frame box (complete near people) and only add tiled boxes that are
+    # not vertical partials of those (far/arch people).
+    merge_metric: "ios"
+    merge_threshold: 0.45
+    hybrid: true
+
+tracker:
+  name: "botsort"
+  reid_model: "lmbn"
+  track_buffer: 60
+  appearance_thresh: 0.25
+  match_thresh: 0.8
+
+reid_gallery:
+  enabled: true
+  cosine_thresh: 0.55
+  time_window_s: 120
+  max_gallery_size: 500
+  ema_alpha: 0.9
+
+zones:
+  # Hand-drawn by the operator in the Zone Editor, with their own labels. All three
+  # trigger on FEET: on this eye-level camera a box centre stays near y~530-650
+  # whatever the distance, so the ground plane is the only thing that separates
+  # "standing at the shopfront" from "standing across the street".
+
+  # people at the shopfront on right side of station entrance
+  - name: "shopfront_dwell_1"
+    polygon: [[1223, 629], [1916, 666], [1915, 1076], [5, 1076], [0, 782]]
+    anchor: "bottom_center"
+
+  # people outside the station entrance
+  - name: "station_entrance"
+    polygon: [[0, 646], [691, 604], [1031, 646], [0, 775]]
+    anchor: "bottom_center"
+
+  # people outside shops at the left side of the station entrance
+  - name: "shopfront_dwell_2"
+    polygon: [[723, 606], [4, 660], [64, 577], [363, 572]]
+    anchor: "bottom_center"
+
+lines:
+  # everyone in or out of the tube entrance.
+  # `max_angle_deg: 45` is the "perpendicular only" rule: a crossing counts only
+  # if the person was travelling more THROUGH the line than ALONG it. Pedestrians
+  # walking past the station clip this line at a shallow angle and are ignored.
+  #
+  # `anchor` is FEET, not centre — this one overrides what was drawn, because
+  # centre demonstrably miscounts here. Track #32 is a person standing still at
+  # x~960: their box merely breathes (centre_y oscillating 530<->557) across this
+  # line and gets counted 5 separate times. Their feet never cross it at all.
+  # Measured over the clip: centre = 17 crossings by 11 people (3 of them
+  # repeats); feet = 6 people, each counted exactly once.
+  #
+  # `cooldown_frames: 60` (2s) is the final guard: nobody genuinely enters and
+  # leaves a tube station inside two seconds, but a box on the line does.
+  - name: "station in/out"
+    start: [949, 542]
+    end: [1220, 572]
+    anchor: "bottom_center"
+    in_label: "ENTER"
+    out_label: "EXIT"
+    max_angle_deg: 45
+    cooldown_frames: 60
+
+analytics:
+  # A smoothed box is the mean of the last N frames, so it trails the person by
+  # (N-1)/2 frames. Foreground people here move ~10px/frame (p90 ~34), so N=5
+  # left the box sitting ~21px behind them and it read as sliding. N=3 halves
+  # that while still averaging out detector jitter.
+  smoothing_window: 3
+  heatmap: true
+  # Scene-wide default anchor: center | bottom_center | top_center.
+  # Individual zones/lines may override it (see station_entrance above).
+  anchor: "center"
+  # Offline gap-filling: bridge short within-track gaps so a person briefly
+  # missed by the detector isn't dropped. Only adds boxes during a track's own
+  # gaps — it cannot lose a continuously-tracked person (e.g. the standing id 6).
+  interpolate: true
+  interpolate_max_gap: 20
+
+privacy:
+  enabled: false
+  method: "blur"

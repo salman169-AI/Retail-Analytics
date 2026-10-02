@@ -1,0 +1,69 @@
+# School entrance, inside the east doors (MEVA G420, high corner camera looking down at two double doors).
+# Video: MEVA dataset (mevadata.org), CC BY 4.0
+#
+# Demo/eval clip below; tracker settings were tuned on a *different* clip from
+# the same camera (2018-03-13.16-30-01.16-35-01.school.G420) so phase-4 numbers stay out-of-sample.
+
+io:
+  source: "data/meva/clips/2018-03-09.10-40-01.10-45-01.school.G420.r13.avi"
+  output_dir: "outputs/meva"
+  max_frames: null
+
+meva:
+  tune_clip: "2018-03-13.16-30-01.16-35-01.school.G420"
+
+detector:
+  model: "yolo26m.pt"
+  weights_dir: "weights"
+  device: "cuda:0"
+  confidence: 0.25
+  iou: 0.7
+  classes: [0]
+  slicer:
+    enabled: false
+
+tracker:
+  name: "botsort"
+  reid_model: "lmbn"
+  track_buffer: 60
+  appearance_thresh: 0.25
+  match_thresh: 0.8
+  use_cmc: false            # fixed CCTV camera: no camera motion to compensate
+
+reid_gallery:
+  enabled: true
+  cosine_thresh: 0.65
+  time_window_s: 120
+  max_gallery_size: 500
+  ema_alpha: 0.9
+
+doors:
+  # Both double doors as one doorway. Placed from the feet of every detection
+  # on the *tuning* clip (outputs/meva/phase2/feet_entrance.jpg): the outer
+  # line runs along the floor at the door bottoms (feet seen through the open
+  # doors sit beyond it = outside); the inner line is one step (~80 px) into the
+  # lobby, so the mats count as inside. A count needs the feet to cross both.
+  - name: "east doors"
+    outer: [[840, 668], [1420, 826]]
+    inner: [[818, 745], [1398, 904]]
+    anchor: "bottom_center"
+    in_label: "IN"
+    out_label: "OUT"
+    # Crowd guards, chosen by replaying tracks from the *tuning* clip (frames
+    # 5400-7200 of 2018-03-13.16-30, where MEVA labels 34 entries, 0 exits):
+    # no guards gave 32 IN / 8 OUT; these give 28 IN / 1 OUT. See analytics/door.py.
+    settle_frames: 3          # 0.1 s on a side before it counts as settled
+    cooldown_frames: 30       # ignore a reversal within 1 s of a count
+    forget_after_frames: 30   # unseen > 1 s: forget the side (gallery re-links)
+
+analytics:
+  smoothing_window: 3
+  heatmap: true
+  anchor: "bottom_center"
+  interpolate: true
+  interpolate_max_gap: 20
+  min_dwell_s: 3.0
+
+privacy:
+  enabled: false
+  method: "blur"

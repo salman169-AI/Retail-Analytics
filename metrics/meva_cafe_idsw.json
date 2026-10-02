@@ -1,0 +1,32 @@
+[
+  {
+    "clip": "2018-03-07.17-20-00.17-25-00.school.G421",
+    "start": 0,
+    "frames": 9001,
+    "detector": "full",
+    "variant": "base",
+    "track_fps": 8.2,
+    "gt_recall": 0.724,
+    "gt_idsw": 107,
+    "gt_tracks": 169,
+    "ids": 58,
+    "short_ids_lt1s": 12,
+    "median_track_s": 25.6,
+    "boxes_per_frame": 11.61
+  },
+  {
+    "clip": "2018-03-07.17-20-00.17-25-00.school.G421",
+    "start": 0,
+    "frames": 9001,
+    "detector": "full",
+    "variant": "bytetrack",
+    "track_fps": 139.2,
+    "gt_recall": 0.745,
+    "gt_idsw": 162,
+    "gt_tracks": 169,
+    "ids": 313,
+    "short_ids_lt1s": 159,
+    "median_track_s": 0.9,
+    "boxes_per_frame": 12.17
+  }
+]

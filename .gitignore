@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env
+
+# Local editor state
+.idea/
+.vscode/
+
+# Tooling
+.ruff_cache/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Project data & outputs (large binaries — keep out of git)
+data/**
+!data/.gitkeep
+!data/**/README.md
+!data/**/LICENSE*
+outputs/**
+!outputs/.gitkeep
+# Portfolio assets are deliverables — keep them tracked.
+!outputs/portfolio/
+!outputs/portfolio/**
+
+# Model weights
+*.pt
+*.onnx
+*.engine
+*.pth
+
+# Raw input videos (large; keep out of git)
+Videos/
+
+# OS
+.DS_Store
+Thumbs.db

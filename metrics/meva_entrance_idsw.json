@@ -1,0 +1,32 @@
+[
+  {
+    "clip": "2018-03-09.10-40-01.10-45-01.school.G420",
+    "start": 0,
+    "frames": 9000,
+    "detector": "full",
+    "variant": "base",
+    "track_fps": 9.9,
+    "gt_recall": 0.72,
+    "gt_idsw": 53,
+    "gt_tracks": 122,
+    "ids": 93,
+    "short_ids_lt1s": 5,
+    "median_track_s": 13.0,
+    "boxes_per_frame": 4.32
+  },
+  {
+    "clip": "2018-03-09.10-40-01.10-45-01.school.G420",
+    "start": 0,
+    "frames": 9000,
+    "detector": "full",
+    "variant": "bytetrack",
+    "track_fps": 174.5,
+    "gt_recall": 0.718,
+    "gt_idsw": 62,
+    "gt_tracks": 122,
+    "ids": 179,
+    "short_ids_lt1s": 42,
+    "median_track_s": 5.2,
+    "boxes_per_frame": 4.38
+  }
+]

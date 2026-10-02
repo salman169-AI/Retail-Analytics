@@ -1,0 +1,26 @@
+[
+  {
+    "clip": "2018-03-09.10-40-01.10-45-01.school.G420",
+    "tolerance_s": 2.0,
+    "in": {
+      "labels": 13,
+      "counted": 14,
+      "count_error": 1,
+      "matched": 13,
+      "missed": 0,
+      "false_counts": 1,
+      "recall": 1.0,
+      "precision": 0.929
+    },
+    "out": {
+      "labels": 59,
+      "counted": 51,
+      "count_error": -8,
+      "matched": 50,
+      "missed": 9,
+      "false_counts": 1,
+      "recall": 0.847,
+      "precision": 0.98
+    }
+  }
+]

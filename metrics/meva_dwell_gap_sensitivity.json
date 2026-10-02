@@ -1,0 +1,25 @@
+{
+  "note": "post-hoc sensitivity: zone-visit merge gap chosen after seeing errors; 1.0 s is the pre-set value",
+  "by_gap_s": {
+    "1.0": {
+      "mean_abs_error_s": 65.77,
+      "median_abs_error_s": 9.27,
+      "within_2s": 7
+    },
+    "3.0": {
+      "mean_abs_error_s": 64.27,
+      "median_abs_error_s": 9.5,
+      "within_2s": 6
+    },
+    "5.0": {
+      "mean_abs_error_s": 63.51,
+      "median_abs_error_s": 9.5,
+      "within_2s": 6
+    },
+    "10.0": {
+      "mean_abs_error_s": 58.45,
+      "median_abs_error_s": 23.93,
+      "within_2s": 6
+    }
+  }
+}

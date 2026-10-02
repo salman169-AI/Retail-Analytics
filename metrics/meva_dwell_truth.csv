@@ -1,0 +1,16 @@
+visit,place,id,start,end,true_start_s,true_end_s,drawn,note
+1,counter queue,8,387,840,13.0,169.5,original draw,same person stays in the queue; tracker split the visit (box shrank to head when occluded)
+2,coffee station,26,1206,1436,40.3,48.5,original draw,
+3,counter queue,25,1595,2003,32.0,192.0,original draw,stands at the back edge of the queue behind others; split into several pieces
+4,coffee station,1,1832,1993,57.5,121.0,original draw,feet below frame edge at start (start +/-1 s); id later switched to another man
+5,counter queue,12,2574,3016,21.0,141.5,original draw,"split into pieces, partly under other ids"
+6,counter queue,6,8335,8441,277.5,281.5,replacement (visit 3/5 duplicate),walks through the queue area
+7,tables,22,2991,3081,99.8,102.3,original draw,walks through along the zone edge
+8,counter queue,26,878,1193,20.0,39.8,replacement (visit 3/5 duplicate),staff member sweeping in and around the queue area
+9,coffee station,16,3843,4970,128.5,165.5,original draw,
+10,lounge,37,4135,4377,137.8,145.7,original draw,staff member sweeping along the zone edge
+11,tables,1,4838,5079,161.0,169.5,original draw,feet on the zone edge most of the visit
+12,counter queue,30,5423,8517,181.0,284.0,original draw,
+13,lounge,47,6401,6518,189.3,297.3,original draw,seated man; logged piece is a short fragment under another id
+14,tables,48,7297,7485,170.0,300.0,original draw,seated until the end of the clip (true end censored at 300 s)
+15,lounge,18,8769,8917,0.0,300.0,original draw,seated on the sofa for the whole clip (censored both ends)

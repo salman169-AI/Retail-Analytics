@@ -1,0 +1,75 @@
+# School cafe with a staffed snack counter (MEVA G421, high corner camera).
+# Video: MEVA dataset (mevadata.org), CC BY 4.0
+#
+# Demo/eval clip below; tracker settings were tuned on a *different* clip from
+# the same camera (2018-03-07.16-50-00.16-55-00.school.G421) so phase-4 numbers stay out-of-sample.
+
+io:
+  source: "data/meva/clips/2018-03-07.17-20-00.17-25-00.school.G421.r13.avi"
+  output_dir: "outputs/meva"
+  max_frames: null
+
+meva:
+  tune_clip: "2018-03-07.16-50-00.16-55-00.school.G421"
+
+detector:
+  model: "yolo26m.pt"
+  weights_dir: "weights"
+  device: "cuda:0"
+  confidence: 0.25
+  iou: 0.7
+  classes: [0]
+  slicer:
+    enabled: false
+
+tracker:
+  name: "botsort"
+  reid_model: "lmbn"
+  track_buffer: 60
+  appearance_thresh: 0.25
+  match_thresh: 0.8
+  use_cmc: false            # fixed CCTV camera: no camera motion to compensate
+
+# Gallery on, but stricter than the 0.55 default: on the tuning clip 0.65 gave
+# the same 44 identity switches with far less merging (31 ids vs 21), and
+# 0.55 merged different people at the entrance and in the gym.
+reid_gallery:
+  enabled: true
+  cosine_thresh: 0.65
+  time_window_s: 120
+  max_gallery_size: 500
+  ema_alpha: 0.9
+
+# Zones and queue drawn on this clip's own scene from a detector-only foot map
+# (outputs/meva/phase2/feet_cafe.jpg). Furniture differs between days, so each
+# demo clip gets its own geometry; no tracking outcome was used to place them.
+zones:
+  - name: "lounge"            # sofas and armchairs, back left
+    polygon: [[90, 290], [560, 290], [560, 520], [120, 520]]
+  - name: "tables"            # the small round tables in the middle
+    polygon: [[580, 380], [1000, 380], [1000, 640], [600, 640]]
+  - name: "coffee station"    # high tables with cups and milk, front right
+    polygon: [[1350, 560], [1920, 560], [1920, 1072], [1450, 1072]]
+
+queues:
+  # Floor in front of the counter (left edge), following the line as it snakes
+  # up and to the right towards the doors. People walking through it are
+  # excluded by speed, not by shape.
+  - name: "counter queue"
+    polygon: [[360, 760], [1000, 640], [1350, 640], [1350, 830], [1000, 1072], [360, 1072]]
+    anchor: "bottom_center"
+    max_speed: 0.5
+    min_visit_s: 3.0
+    recent: 10
+
+analytics:
+  smoothing_window: 3
+  heatmap: true
+  anchor: "bottom_center"
+  interpolate: true
+  interpolate_max_gap: 20
+  min_dwell_s: 3.0
+
+privacy:
+  enabled: false
+  method: "blur"

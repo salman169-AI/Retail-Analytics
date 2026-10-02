@@ -1,0 +1,78 @@
+# School gym, wide view of the floor (MEVA G330, calibrated camera).
+# Video: MEVA dataset (mevadata.org), CC BY 4.0
+#
+# Demo/eval clip below; tracker settings were tuned on a *different* clip from
+# the same camera (2018-03-11.11-50-00.11-55-00.school.G330) so phase-4 numbers stay out-of-sample.
+
+io:
+  source: "data/meva/clips/2018-03-09.10-15-00.10-20-00.school.G330.r13.avi"
+  output_dir: "outputs/meva"
+  max_frames: null
+
+meva:
+  tune_clip: "2018-03-11.11-50-00.11-55-00.school.G330"
+
+detector:
+  model: "yolo26m.pt"
+  weights_dir: "weights"
+  device: "cuda:0"
+  confidence: 0.25
+  iou: 0.7
+  classes: [0]
+  # Tiled + full-frame hybrid: the far side of the court and the back of a crowd
+  # are only ~60-110 px tall. On the tuning clip it raised recall on annotated
+  # people from 0.171 to 0.243 (0.339 with the lower tracker gates below);
+  # the extra boxes were checked by eye and are real people
+  # (outputs/meva/phase2/gym_tiled_check.jpg). Costs ~6 FPS detection.
+  slicer:
+    enabled: true
+    slice_wh: [640, 640]
+    overlap_ratio: 0.2
+    merge_metric: "ios"
+    merge_threshold: 0.45
+    hybrid: true
+
+tracker:
+  name: "botsort"
+  reid_model: "lmbn"
+  track_buffer: 60
+  appearance_thresh: 0.25
+  match_thresh: 0.8
+  use_cmc: false            # fixed CCTV camera: no camera motion to compensate
+  # Let partly hidden people (conf 0.4-0.6) start and keep tracks. In this crowd
+  # it raised recall on annotated people from 0.243 to 0.339 (tiled). It also
+  # breaks more tracks, which a heatmap tolerates and dwell does not.
+  track_high_thresh: 0.4
+  new_track_thresh: 0.4
+
+# Off here: in the gym crowd the re-entry gallery hands newcomers the id of
+# someone nearby. Tuning clip: 110 identity switches with it, 66 without
+# (85 even at the stricter 0.65 threshold).
+reid_gallery:
+  enabled: false
+  cosine_thresh: 0.65
+  time_window_s: 120
+  max_gallery_size: 500
+  ema_alpha: 0.9
+
+# Drawn on this clip's own scene from a detector-only foot map
+# (outputs/meva/phase2/feet_gym.jpg); the gym furniture moves between days.
+zones:
+  - name: "chairs"            # rows of folding chairs in front of the stage
+    polygon: [[330, 430], [860, 385], [1120, 395], [1150, 470], [860, 545], [330, 565]]
+  - name: "court"             # open floor
+    polygon: [[860, 545], [1150, 470], [1920, 520], [1920, 1080], [620, 1080], [460, 640]]
+
+analytics:
+  smoothing_window: 3
+  heatmap: true
+  anchor: "bottom_center"
+  interpolate: true
+  interpolate_max_gap: 20
+  min_dwell_s: 3.0
+  # Many short tracks in the crowd: per-person labels pile up into noise.
+  show_labels: false
+
+privacy:
+  enabled: false
+  method: "blur"

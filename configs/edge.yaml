@@ -1,0 +1,56 @@
+# Edge deployment profile: the lightweight, export-friendly configuration.
+# Same schema as configs/default.yaml — only the model sizes differ.
+
+io:
+  source: "data/samples/people-walking.mp4"
+  output_dir: "outputs"
+  max_frames: null
+
+eval:
+  sequence_dir: "data/eval/MOT20-01"
+
+detector:
+  model: "yolo26n.pt"       # nano detector for edge
+  weights_dir: "weights"
+  device: "cuda:0"
+  confidence: 0.3
+  iou: 0.7
+  classes: [0]
+  slicer:
+    enabled: false
+    slice_wh: [640, 640]
+    overlap_ratio: 0.2
+
+tracker:
+  name: "botsort"
+  reid_model: "lmbn"        # LightMBN — the edge appearance model
+  track_buffer: 60
+  appearance_thresh: 0.25
+  match_thresh: 0.8
+
+reid_gallery:
+  enabled: true
+  cosine_thresh: 0.55
+  time_window_s: 120
+  max_gallery_size: 500
+  ema_alpha: 0.9
+
+zones:
+  - name: "waiting_area"
+    polygon: [[250, 420], [580, 420], [580, 720], [250, 720]]
+  - name: "main_concourse"
+    polygon: [[650, 340], [1280, 340], [1280, 800], [650, 800]]
+
+lines:
+  - name: "concourse_crossing"
+    start: [0, 600]
+    end: [1920, 600]
+
+analytics:
+  smoothing_window: 5
+  heatmap: true
+  anchor: "center"
+
+privacy:
+  enabled: false
+  method: "blur"

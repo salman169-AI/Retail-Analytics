@@ -1,0 +1,113 @@
+{
+  "visits": 15,
+  "mean_abs_error_s": 65.77,
+  "median_abs_error_s": 9.27,
+  "mean_signed_error_s": -65.57,
+  "per_visit": [
+    {
+      "visit": 1,
+      "place": "counter queue",
+      "predicted_s": 15.13,
+      "true_s": 156.5,
+      "error_s": -141.37
+    },
+    {
+      "visit": 2,
+      "place": "coffee station",
+      "predicted_s": 7.7,
+      "true_s": 8.2,
+      "error_s": -0.5
+    },
+    {
+      "visit": 3,
+      "place": "counter queue",
+      "predicted_s": 13.63,
+      "true_s": 160.0,
+      "error_s": -146.37
+    },
+    {
+      "visit": 4,
+      "place": "coffee station",
+      "predicted_s": 5.4,
+      "true_s": 63.5,
+      "error_s": -58.1
+    },
+    {
+      "visit": 5,
+      "place": "counter queue",
+      "predicted_s": 14.77,
+      "true_s": 120.5,
+      "error_s": -105.73
+    },
+    {
+      "visit": 6,
+      "place": "counter queue",
+      "predicted_s": 3.57,
+      "true_s": 4.0,
+      "error_s": -0.43
+    },
+    {
+      "visit": 7,
+      "place": "tables",
+      "predicted_s": 3.03,
+      "true_s": 2.5,
+      "error_s": 0.53
+    },
+    {
+      "visit": 8,
+      "place": "counter queue",
+      "predicted_s": 10.53,
+      "true_s": 19.8,
+      "error_s": -9.27
+    },
+    {
+      "visit": 9,
+      "place": "coffee station",
+      "predicted_s": 37.6,
+      "true_s": 37.0,
+      "error_s": 0.6
+    },
+    {
+      "visit": 10,
+      "place": "lounge",
+      "predicted_s": 8.1,
+      "true_s": 7.9,
+      "error_s": 0.2
+    },
+    {
+      "visit": 11,
+      "place": "tables",
+      "predicted_s": 8.07,
+      "true_s": 8.5,
+      "error_s": -0.43
+    },
+    {
+      "visit": 12,
+      "place": "counter queue",
+      "predicted_s": 103.17,
+      "true_s": 103.0,
+      "error_s": 0.17
+    },
+    {
+      "visit": 13,
+      "place": "lounge",
+      "predicted_s": 3.93,
+      "true_s": 108.0,
+      "error_s": -104.07
+    },
+    {
+      "visit": 14,
+      "place": "tables",
+      "predicted_s": 6.3,
+      "true_s": 130.0,
+      "error_s": -123.7
+    },
+    {
+      "visit": 15,
+      "place": "lounge",
+      "predicted_s": 4.97,
+      "true_s": 300.0,
+      "error_s": -295.03
+    }
+  ]
+}
