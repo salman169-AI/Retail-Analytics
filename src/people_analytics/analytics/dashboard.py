@@ -417,111 +417,118 @@ def cover(
     queue_poly: list,
     staff_poly: list,
     waiting: int,
-    title: str = "Retail Footfall Analytics",
-    chips: tuple[tuple[str, str], ...] = (
-        ("Queue & Wait", t.QUEUE), ("Dwell Time", t.CYAN),
-        ("People Counting", t.SUCCESS), ("Staff Alerts", t.DANGER),
+    wait_s: float | None,
+    staffed: bool,
+    features: tuple[tuple[str, str], ...] = (
+        ("People counting", t.SUCCESS), ("Dwell time", t.CYAN),
+        ("Queue & wait", t.QUEUE), ("Staff alerts", t.DANGER),
     ),
 ) -> np.ndarray:
-    """Portfolio cover, 1600x1200: a real frame with its overlays, title and feature chips.
+    """1600x1200 camera cover with a few overlays from the replayed state."""
+    width, height, scale = 1600, 1200, 2
+    safe_x = 130  # Keep overlay text inside the portfolio tile's side crops.
+    safe_w = width - 2 * safe_x
+    source = Image.fromarray(frame[..., ::-1])
+    crop_h = min(source.height, int(source.width * height / width))
+    crop_h = int(crop_h * .98)
+    crop_w = int(crop_h * width / height)
+    top = source.height - crop_h
+    out = source.crop((0, top, crop_w, top + crop_h)).resize(
+        (width * scale, height * scale), Image.Resampling.LANCZOS).convert("RGBA")
+    overlay = Image.new("RGBA", out.size)
+    d = ImageDraw.Draw(overlay)
 
-    Built to survive small screens and tile cropping: all text and key content sits
-    at least `PAD` px from the sides, type is large, and only a few overlays are drawn.
-    """
-    W, H, PAD = 1600, 1200, 130
-    photo_h = 900
-    out = Image.new("RGB", (W, H), _rgb(t.SURFACE))
+    def point(x: float, y: float) -> tuple[float, float]:
+        return x / crop_w * width * scale, (y - top) / crop_h * height * scale
 
-    # Photo: full width, top-anchored crop of the frame.
-    src = Image.fromarray(frame[..., ::-1])
-    s = W / src.width
-    y_off = 20  # trims the ceiling strip so people sit higher
-    photo = src.resize((W, int(src.height * s)), Image.Resampling.LANCZOS)
-    photo = photo.crop((0, int(y_off * s), W, int(y_off * s) + photo_h))
+    d.polygon([point(*p) for p in queue_poly], fill=(*t.rgb(t.QUEUE), 20),
+              outline=(*t.rgb(t.QUEUE), 255), width=4 * scale)
+    staff_color = t.SUCCESS if staffed else t.DANGER
+    d.polygon([point(*p) for p in staff_poly], fill=(*t.rgb(staff_color), 38),
+              outline=(*t.rgb(staff_color), 255), width=4 * scale)
+    selected = [row for row in boxes if row[0] in queue_ids]
+    if not selected:
+        selected = sorted(boxes, key=lambda row: (row[1][2] - row[1][0]) *
+                          (row[1][3] - row[1][1]), reverse=True)[:3]
+    for gid, (x1, y1, x2, y2), _ in selected:
+        color = t.QUEUE if gid in queue_ids else t.SUCCESS
+        d.rectangle((*point(x1, y1), *point(x2, y2)), outline=(*t.rgb(color), 255),
+                    width=4 * scale)
+    out = Image.alpha_composite(out, overlay)
 
-    def pt(x: float, y: float) -> tuple[float, float]:
-        return x * s, (y - y_off) * s
+    # Gentle edge shading supports the overlays without darkening people's faces.
+    shade = Image.new("RGBA", (1, height * scale))
+    for y in range(height * scale):
+        logical_y = y / scale
+        strength = max(0, (260 - logical_y) / 260, (logical_y - 900) / 300)
+        shade.putpixel((0, y), (*t.rgb(t.UI_RAIL), int(100 * strength)))
+    out = Image.alpha_composite(out, shade.resize(out.size))
+    overlay = Image.new("RGBA", out.size)
+    d = ImageDraw.Draw(overlay)
 
-    over = Image.new("RGBA", photo.size, (0, 0, 0, 0))
-    d = ImageDraw.Draw(over)
-    qp = [pt(*p) for p in queue_poly]
-    d.polygon(qp, fill=(*_rgb(t.QUEUE), 46), outline=(*_rgb(t.QUEUE), 255), width=5)
-    sp = [pt(*p) for p in staff_poly]
-    d.polygon(sp, fill=(*_rgb(t.DANGER), 40), outline=(*_rgb(t.DANGER), 255), width=5)
-    for gid, (x1, y1, x2, y2), _ in boxes:
-        a, b = pt(x1, y1), pt(x2, y2)
-        if gid in queue_ids:
-            d.rectangle((*a, *b), outline=(*_rgb(t.QUEUE), 255), width=6)
-        else:
-            d.rectangle((*a, *b), outline=(255, 255, 255, 150), width=2)
-    photo = Image.alpha_composite(photo.convert("RGBA"), over)
+    def rect(x: int, y: int, w: int, h: int, color: str, alpha: int = 255,
+             radius: int = 14) -> None:
+        d.rounded_rectangle((x * scale, y * scale, (x + w) * scale, (y + h) * scale),
+                            radius=radius * scale, fill=(*t.rgb(color), alpha))
 
-    # Fade the photo into the title band.
-    fade = Image.new("L", (1, photo_h))
-    for y in range(photo_h):
-        # Fully faded by y=860: the scaled frame ends just below that (~876 px).
-        fade.putpixel((0, y), int(255 * max(0.0, min(1.0, (y - 580) / 280)) ** 1.4))
-    band = Image.new("RGBA", photo.size, (*_rgb(t.SURFACE), 255))
-    photo = Image.composite(band, photo, fade.resize(photo.size))
-    out.paste(photo.convert("RGB"), (0, 0))
-    d = ImageDraw.Draw(out)
+    def text(x: int, y: int, value: str, size: int, color: str = t.INK,
+             bold: bool = False, max_w: int | None = None) -> None:
+        face = _fit_font(value, max_w * scale, size * scale, bold) if max_w else font(
+            size * scale, bold)
+        d.text((x * scale, y * scale), value, font=face, fill=color, anchor="lt")
 
-    def pill(x: int, y: int, text: str, size: int, bg: str, fg: str,
-             dot: str | None = None, border: str | None = None) -> tuple[int, int]:
-        f = font(size, True)
-        x0, y0, x1, y1 = f.getbbox(text)
-        px, py = int(size * 0.6), int(size * 0.38)
-        dot_w = int(size * 0.95) if dot else 0
-        w, h = x1 - x0 + 2 * px + dot_w, y1 - y0 + 2 * py
-        d.rounded_rectangle((x, y, x + w, y + h), radius=h // 2, fill=_rgb(bg),
-                            outline=_rgb(border) if border else None, width=3 if border else 0)
-        if dot:
-            r = size * 0.24
-            cx, cy = x + px + r, y + h / 2
-            d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=_rgb(dot))
-        d.text((x + px + dot_w - x0, y + py - y0), text, font=f, fill=_rgb(fg))
-        return w, h
+    # Keep each class label attached to its box and above the person's head.
+    label_w = int(font(34 * scale, True).getlength("Person") / scale) + 28
+    for gid, (x1, y1, _, _), _ in selected:
+        x, y = point(x1, y1)
+        x = max(safe_x, min(width - safe_x - label_w, int(x / scale)))
+        y = max(64, int(y / scale) - 48)
+        color = t.QUEUE if gid in queue_ids else t.SUCCESS
+        rect(x, y, label_w, 48, color, radius=6)
+        text(x + 14, y + 9, "Person", 34, t.UI_TEXT, True)
 
-    # Top-left product badge.
-    pill(PAD, 56, "VIDEO ANALYTICS", 34, t.CARD, t.INK, dot=t.SUCCESS)
+    rect(safe_x, 64, 314, 62, t.UI_RAIL, 238)
+    d.ellipse(((safe_x + 22) * scale, 85 * scale, (safe_x + 40) * scale, 103 * scale),
+              fill=t.SUCCESS)
+    text(safe_x + 58, 80, "People tracking", 32, bold=True)
 
-    # On-photo callouts, kept inside the side padding.
-    # "In queue" on the open floor at the queue's far end; "counter empty" low on
-    # the counter, clear of customers' faces.
-    qx = int(max(p[0] for p in qp)) - 330
-    qy = int(sum(p[1] for p in qp) / len(qp)) + 20
-    pill(min(qx, W - PAD - 320), qy, f"IN QUEUE  {waiting}", 42, t.QUEUE, t.SURFACE)
-    pill(PAD, 700, "COUNTER EMPTY", 42, t.DANGER, t.SURFACE)
+    alert = not staffed and waiting > 0
+    status_color = t.UI_DANGER if alert else t.UI_ACCENT
+    alert_x = width - safe_x - 606
+    rect(alert_x, 70, 606, 178, t.UI_RAIL, 40)
+    rect(alert_x, 64, 606, 178, t.UI_CARD, 249)
+    rect(alert_x, 64, 7, 178, status_color, radius=3)
+    text(alert_x + 32, 86, "STAFF ALERT" if alert else "COUNTER STATUS", 27, status_color, True)
+    status = "Counter unattended" if alert else "Counter staffed" if staffed else "Counter empty"
+    text(alert_x + 32, 128, status, 43, t.UI_TEXT, True, max_w=542)
+    text(alert_x + 32, 190, "Email notification" if alert else "Service area occupied" if staffed
+         else "No customers waiting", 30, t.UI_SECONDARY, max_w=542)
 
-    # Alert card, top right.
-    cx0, cy0, cw, ch = W - PAD - 600, 56, 600, 190
-    d.rounded_rectangle((cx0, cy0, cx0 + cw, cy0 + ch), radius=22, fill=_rgb(t.CARD),
-                        outline=_rgb(t.BASELINE), width=2)
-    d.rounded_rectangle((cx0, cy0, cx0 + 12, cy0 + ch), radius=6, fill=_rgb(t.DANGER))
-    pill(cx0 + 40, cy0 + 22, "ALERT", 26, t.DANGER, t.SURFACE)
-    d.text((cx0 + 40, cy0 + 74), "Counter unattended", font=font(44, True), fill=_rgb(t.INK))
-    people = "person" if waiting == 1 else "people"
-    d.text((cx0 + 40, cy0 + 132), f"{waiting} {people} waiting in the queue",
-           font=font(32, False), fill=_rgb(t.INK_2))
+    # Label the counter immediately above its polygon, clear of the customers.
+    counter_y = max(190, min(830, int(min(point(*p)[1] for p in staff_poly) / scale) - 66))
+    label = "Counter staffed" if staffed else "Counter empty"
+    face = font(35 * scale, True)
+    label_w = int(face.getlength(label) / scale) + 40
+    rect(safe_x, counter_y, label_w, 56, t.UI_RAIL, 240)
+    rect(safe_x, counter_y, 5, 56, staff_color, radius=2)
+    text(safe_x + 20, counter_y + 11, label, 35, bold=True)
 
-    # Title and feature chips.
-    f = _fit_font(title, W - 2 * PAD, 112)
-    d.text((PAD, 975), title, font=f, fill=_rgb(t.INK), anchor="ls")
-    size = 40
-    while True:  # one row of chips that fits between the paddings
-        widths = []
-        for label, _ in chips:
-            fb = font(size, True)
-            x0, _, x1, _ = fb.getbbox(label)
-            widths.append(x1 - x0 + 2 * int(size * 0.6) + int(size * 0.95))
-        if sum(widths) + 24 * (len(chips) - 1) <= W - 2 * PAD or size <= 20:
-            break
-        size -= 2
-    x = PAD
-    for (label, colour), w in zip(chips, widths, strict=True):
-        pill(x, 1030, label, size, t.CARD, t.INK, dot=colour, border=t.BASELINE)
-        x += w + 24
+    # Keep the queue readout on the lower floor so faces remain unobstructed.
+    queue_x = width - safe_x - 576
+    rect(queue_x, 922, 576, 142, t.UI_RAIL, 240)
+    rect(queue_x, 922, 6, 142, t.QUEUE, radius=3)
+    text(queue_x + 32, 944, f"{waiting} in queue", 58, bold=True, max_w=512)
+    wait = f"~{int(round(wait_s))} s wait" if wait_s is not None else "Wait estimate pending"
+    text(queue_x + 32, 1013, wait, 40, t.UI_ON_DARK, max_w=512)
 
-    # Accent strip along the bottom edge.
-    d.rectangle((0, H - 10, W, H), fill=_rgb(t.ACCENT))
+    # A single translucent row communicates the remaining capabilities.
+    rect(safe_x, 1090, safe_w, 70, t.UI_RAIL, 235)
+    feature_w = safe_w / max(1, len(features))
+    for i, (label, color) in enumerate(features):
+        x = int(safe_x + 22 + i * feature_w)
+        d.ellipse((x * scale, 1118 * scale, (x + 14) * scale, 1132 * scale), fill=color)
+        text(x + 28, 1107, label, 35, bold=True, max_w=int(feature_w - 60))
+
+    out = Image.alpha_composite(out, overlay).convert("RGB").resize(
+        (width, height), Image.Resampling.LANCZOS)
     return np.asarray(out)[..., ::-1].copy()

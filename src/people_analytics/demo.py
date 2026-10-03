@@ -339,7 +339,8 @@ def portfolio_thumbnail(shot: dict, offset_s: float) -> np.ndarray:
     if not ok:
         raise ValueError("Could not read the thumbnail's source frame")
     return dashboard.cover(frame, boxes.get(frame_no, []), set(qm.queuing_ids), q.polygon,
-                           cfg.staff.polygon, qm.length)
+                           cfg.staff.polygon, qm.length, qm.wait_estimate_s,
+                           staff.staffed if staff is not None else True)
 
 
 def build_demo(config: str | Path) -> dict:
