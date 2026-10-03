@@ -28,6 +28,7 @@ import cv2
 import numpy as np
 import yaml
 
+from people_analytics.analytics import theme
 from people_analytics.analytics.floor import (
     FloorProjector,
     krtd_projector,
@@ -36,9 +37,9 @@ from people_analytics.analytics.floor import (
     tile_homography,
 )
 
-INK = (235, 235, 235)
-PAPER = (25, 26, 26)  # BGR of #1a1a19, the stats panel's surface
-WALL = (90, 96, 104)
+INK = theme.bgr(theme.INK)
+PAPER = theme.bgr(theme.SURFACE)
+WALL = theme.bgr(theme.BASELINE)
 
 
 @dataclass
@@ -297,7 +298,7 @@ def draw_paths(canvas: np.ndarray, plan: SitePlan, cameras: list[Camera],
                 arr = arr[arr[:, 0] <= upto_frame.get(cam.name, 0)]
             for piece in path_pieces(arr):
                 xy = smooth_path(cam.room.to_plan(piece[:, 1:3]))
-                cv2.polylines(overlay, [plan.px(xy).astype(np.int32)], False, (255, 230, 160),
+                cv2.polylines(overlay, [plan.px(xy).astype(np.int32)], False, theme.bgr(theme.CYAN),
                               1, cv2.LINE_AA)
     return cv2.addWeighted(overlay, alpha, canvas, 1 - alpha, 0)
 
@@ -346,7 +347,7 @@ def draw_frame(canvas: np.ndarray, plan: SitePlan, rooms: list[Room], title: str
         lines.append(line)
     step = int(note_px * 1.35)
     for i, text in enumerate(reversed(lines)):
-        items.append((text, (16, h - 10 - step * (i + 1)), note_px, (180, 180, 180)))
+        items.append((text, (16, h - 10 - step * (i + 1)), note_px, theme.bgr(theme.MUTED)))
     # 5 m scale bar, just under the rooms' bottom-right corner
     corners = np.vstack([plan.px(r.to_plan(r.outline)) for r in rooms])
     x1 = int(corners[:, 0].max())

@@ -1,17 +1,17 @@
-"""The ~60 s portfolio demo video, assembled from a shot list (configs/meva_demo.yaml).
+"""Portfolio demo video, assembled from a shot list (configs/meva_demo.yaml).
 
 Shot kinds:
 
 - **sitemap**: the site plan filling with heat and walking paths, all cameras at
   once, time-lapsed (each room's clip played back in a few seconds).
-- **scene**: one camera with its overlay, the live stats panel on the right and a
-  caption under the video (`speed` < 1 for slow motion).
-- **summary**: two end-of-clip panels side by side, with the busiest minute.
+- **scene**: the camera workspace with overlays, KPIs, charts and recorded activity
+  (`speed` < 1 for slow motion).
+- **summary**: an end-of-clip analytics page with session insights.
 - **measured**: the evaluation results, read from metrics/*.json at render time.
 - **end**: credits.
 
-Layout is 1920x1080: video 1440 wide, panel 480 wide, captions in the band under
-the video. Shots dip through the background colour for a few frames at each cut.
+Layout is a 1920x1080 monitoring workspace: site navigation, camera player,
+KPIs, charts and recorded activity. Shots dip through the background at each cut.
 """
 
 from __future__ import annotations
@@ -26,20 +26,19 @@ import yaml
 from loguru import logger
 from PIL import Image, ImageDraw
 
+from people_analytics.analytics import dashboard, theme
 from people_analytics.analytics.composite import FFmpegWriter, SceneStats, _load, iter_scene
-from people_analytics.analytics.panel import render_panel
+from people_analytics.analytics.panel import PanelState
 from people_analytics.analytics.render import font
 from people_analytics.config import load_config
 
 W, H = 1920, 1080
-VIDEO_W = 1440
-PANEL_W = W - VIDEO_W
-BG = (25, 26, 26)  # BGR of the panel surface #1a1a19
-INK = (255, 255, 255)
-INK_2 = (183, 194, 195)  # BGR of #c3c2b7
-MUTED = (129, 135, 137)
-ACCENT = (52, 104, 235)  # BGR of the overlay orange #eb6834
-CREDIT = "Video: MEVA dataset (mevadata.org), CC BY 4.0"
+BG = theme.bgr(theme.SURFACE)
+INK = theme.bgr(theme.INK)
+INK_2 = theme.bgr(theme.INK_2)
+MUTED = theme.bgr(theme.MUTED)
+ACCENT = theme.bgr(theme.ACCENT)
+CREDIT = theme.CREDIT
 FADE = 6  # frames dipped to the background at each cut
 
 
@@ -83,8 +82,10 @@ def _fit(img: np.ndarray, w: int, h: int) -> np.ndarray:
 
 
 def _caption_band(canvas: np.ndarray, x: int, y: int, w: int, caption: str, sub: str) -> None:
-    _text(canvas, [(caption, 46, INK, True), (sub, 30, INK_2, False)], x + 40, y + 34,
-          gap=10, max_w=w - 80)
+    cv2.line(canvas, (x, y), (x + w - 1, y), theme.bgr(theme.BASELINE), 1)
+    _text(canvas, [("RETAIL ANALYTICS  /  CAMERA REPLAY", 18, ACCENT, True)], x + 40, y + 23)
+    _text(canvas, [(caption, 39, INK, True), (sub, 27, INK_2, False)], x + 40, y + 61,
+          gap=14, max_w=w - 80)
 
 
 # --- shots ---------------------------------------------------------------------
@@ -101,14 +102,18 @@ def _config(shot: dict):
 
 def shot_scene(shot: dict, fps: float):
     cfg = _config(shot)
-    caption_y = int(VIDEO_W * 9 / 16)  # 810
-    for img, panel, _ in iter_scene(cfg, shot["title"], shot["start_s"], shot["seconds"],
-                                    speed=shot.get("speed", 1.0), panel_size=(PANEL_W, H),
-                                    highlight=set(shot.get("highlight", []))):
-        canvas = _blank()
-        canvas[:caption_y, :VIDEO_W] = _fit(img, VIDEO_W, caption_y)
-        canvas[:, VIDEO_W:] = panel
-        _caption_band(canvas, 0, caption_y, VIDEO_W, shot["caption"], shot["sub"])
+    _, activity, source_fps, total = _load(cfg)
+
+    def render(state: PanelState, _size: tuple[int, int]) -> np.ndarray:
+        return dashboard.monitor(state, activity, total / source_fps, shot["caption"], shot["sub"])
+
+    x, y, w, h = dashboard.CAMERA
+    for img, layer, _ in iter_scene(cfg, shot["title"], shot["start_s"], shot["seconds"],
+                                    speed=shot.get("speed", 1.0), panel_size=(W, H),
+                                    highlight=set(shot.get("highlight", [])),
+                                    panel_renderer=render):
+        canvas = layer.copy()
+        canvas[y:y + h, x:x + w] = _fit(img, w, h)
         yield canvas
 
 
@@ -182,14 +187,13 @@ def busiest_minute(activity_csv: Path, fps: float, minutes: int) -> tuple[int, i
 
 
 def shot_summary(shot: dict, fps: float):
-    canvas = _blank()
     notes = []
-    for k, spec in enumerate(shot["panels"]):
+    states = []
+    for spec in shot["panels"]:
         cfg = load_config(spec["config"])
         _, activity, cfps, total = _load(cfg)
         stats = SceneStats(cfg, activity, cfps, total, spec["title"])
-        canvas[:, k * PANEL_W:(k + 1) * PANEL_W] = render_panel(stats.state(total, None),
-                                                               (PANEL_W, H))
+        states.append(stats.state(total, None))
         if cfg.doors:
             stem = Path(cfg.io.source).stem
             m, n = busiest_minute(Path(cfg.io.output_dir) / "analytics" / f"{stem}_activity.csv",
@@ -209,10 +213,8 @@ def shot_summary(shot: dict, fps: float):
             if q:
                 notes.append(f"Most people queueing at once: {q['peak_length']}; "
                              f"{q['visits']} queue visits in 5 minutes.")
-    x = len(shot["panels"]) * PANEL_W + 70
-    _text(canvas, [(shot["caption"], 52, INK, True),
-                   (shot.get("sub", "Totals for the full 5-minute clip."), 30, INK_2, False)]
-          + [(n, 30, INK, False) for n in notes], x, 140, gap=26, max_w=W - x - 70)
+    canvas = dashboard.report(states, notes, shot["caption"],
+                              shot.get("sub", "Totals for the full 5-minute clip."))
     for _ in range(int(shot["seconds"] * fps)):
         yield canvas
 
@@ -243,20 +245,9 @@ def shot_measured(shot: dict, fps: float):
         rows[f"{scene}_idsw"] = ("Tracking people through a crowd", f"{1 - ours / bt:.0%} fewer",
                                  f"identity switches than ByteTrack in {place} "
                                  f"({ours} vs {bt}, full 5 minutes)")
-    canvas = _blank()
-    y = _text(canvas, [("Measured on footage the system was not tuned on", 52, INK, True),
-                       ("Ground truth: MEVA's own annotations", 30, INK_2, False)], 140, 150,
-              gap=20)
-    y += 50
-    for key in shot.get("items", ["doors", "cafe_idsw", "entrance_idsw"]):
-        label, big, rest = rows[key]
-        _text(canvas, [(label, 30, INK_2, False)], 140, y)
-        _text(canvas, [(big, 64, INK, True)], 140, y + 44)
-        _text(canvas, [(rest, 32, INK_2, False)], 620, y + 62, max_w=W - 760)
-        y += 210
-    cv2.line(canvas, (140, y - 30), (W - 140, y - 30), (44, 44, 44), 1)
-    _text(canvas, [("Full results, method and limits: metrics/meva_eval.md", 26, MUTED, False),
-                   (CREDIT, 26, MUTED, False)], 140, y, gap=6)
+    keys = shot.get("items", ["doors", "cafe_idsw", "entrance_idsw"])
+    comparison = m["idsw"].get(keys[0].removesuffix("_idsw")) if len(keys) == 1 else None
+    canvas = dashboard.measured([rows[key] for key in keys], comparison)
     for _ in range(int(shot["seconds"] * fps)):
         yield canvas
 
@@ -279,31 +270,15 @@ def shot_email(shot: dict, fps: float):
     alert = StaffAlert(r["frame"], r["time_s"], r["id"], r["value_s"], cfg.staff.name)
     subject, body = notify.alert_text(cfg.notify.site_name, alert.message, alert.time_s,
                                       "cafe camera")
-    canvas = _blank()
-    _text(canvas, [(shot["caption"], 52, INK, True), (shot["sub"], 30, INK_2, False)],
-          140, 110, gap=14, max_w=W - 280)
-    x0, y0, x1, y1 = 140, 330, W - 140, 900
-    cv2.rectangle(canvas, (x0, y0), (x1, y1), (44, 44, 44), -1)
-    cv2.rectangle(canvas, (x0, y0), (x1, y0 + 8), ACCENT, -1)
-    y = _text(canvas, [("From: Cafe camera alerts", 26, INK_2, False),
-                       ("To: Cafe manager", 26, INK_2, False),
-                       (f"Subject: {subject}", 30, INK, True)], x0 + 40, y0 + 40, gap=8)
-    cv2.line(canvas, (x0 + 40, y + 10), (x1 - 40, y + 10), (70, 70, 70), 1)
-    _text(canvas, [(ln, 28, INK, False) for ln in body.splitlines() if ln.strip()],
-          x0 + 40, y + 40, gap=10, max_w=x1 - x0 - 80)
+    canvas = dashboard.email(subject, body)
     for _ in range(int(shot["seconds"] * fps)):
         yield canvas
 
 
 def shot_end(shot: dict, fps: float, author: str):
-    canvas = _blank()
     title = shot.get("title", ["People counting, dwell time & heatmaps",
                                "with occlusion-robust tracking"])
-    _text(canvas, [(line, 60, INK, True) for line in title], 140, 300, gap=4)
-    _text(canvas, [("Personal demo on the MEVA dataset (CC BY 4.0)", 36, INK_2, False),
-                   (author, 36, INK, True),
-                   (CREDIT, 26, MUTED, False)], 140, 560, gap=22)
-    cv2.rectangle(canvas, (140, 270), (230, 278), ACCENT, -1)
+    canvas = dashboard.end(title, author)
     for _ in range(int(shot["seconds"] * fps)):
         yield canvas
 
@@ -325,6 +300,46 @@ def _with_fades(frames, fade: int = FADE):
     for j, fr in enumerate(buf):
         a = 1 - (j + 1) / (len(buf) + 1)
         yield (fr.astype(np.float32) * a + bg * (1 - a)).astype(np.uint8)
+
+
+def portfolio_thumbnail(shot: dict, offset_s: float) -> np.ndarray:
+    """Portfolio cover from source footage and exported detections (no re-tracking).
+
+    The queue and counter state at the chosen frame are replayed from the clip start,
+    so the cover shows what the system actually reported at that moment.
+    """
+    import supervision as sv
+
+    from people_analytics.analytics.activity import _ANCHORS
+    from people_analytics.analytics.queue import QueueMonitor
+    from people_analytics.analytics.staff import build_staff_monitor, waiting_count
+
+    cfg = _config(shot)
+    boxes, _, fps, _ = _load(cfg)
+    frame_no = int((shot["start_s"] + offset_s) * fps) + 1
+    q = cfg.queues[0]
+    qm = QueueMonitor(np.array(q.polygon), fps, anchor=_ANCHORS[q.anchor or "bottom_center"],
+                      max_speed=q.max_speed, min_visit_s=q.min_visit_s, recent=q.recent)
+    staff = build_staff_monitor(cfg, fps)
+    for f in range(1, frame_no + 1):
+        rows = boxes.get(f, [])
+        det = (sv.Detections(xyxy=np.array([b for _, b, _ in rows]),
+                             tracker_id=np.array([g for g, _, _ in rows]),
+                             confidence=np.ones(len(rows)), class_id=np.zeros(len(rows), int))
+               if rows else sv.Detections.empty())
+        qm.update(det)
+        if staff is not None:
+            staff.update(det, waiting_count(cfg, [(q, qm)]))
+    cap = cv2.VideoCapture(cfg.io.source)
+    try:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no - 1)
+        ok, frame = cap.read()
+    finally:
+        cap.release()
+    if not ok:
+        raise ValueError("Could not read the thumbnail's source frame")
+    return dashboard.cover(frame, boxes.get(frame_no, []), set(qm.queuing_ids), q.polygon,
+                           cfg.staff.polygon, qm.length)
 
 
 def build_demo(config: str | Path) -> dict:
@@ -354,7 +369,10 @@ def build_demo(config: str | Path) -> dict:
                 yield fr
 
         n = 0
-        for frame in _with_fades(capture(gen)):
+        frames = capture(gen)
+        if spec.get("transitions", "fade") == "fade":
+            frames = _with_fades(frames)
+        for frame in frames:
             out.write(frame)
             n += 1
         if grab:
@@ -362,6 +380,8 @@ def build_demo(config: str | Path) -> dict:
         durations.append((kind, round(n / fps, 2)))
         logger.info(f"{kind}: {n / fps:.1f} s")
     path = out.close()
+    if spec.get("thumbnail_style") == "portfolio":
+        thumb = portfolio_thumbnail(spec["shots"][t_shot], t_sec)
     if thumb is not None and spec.get("thumbnail"):
         Path(spec["thumbnail"]).parent.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(spec["thumbnail"], thumb)

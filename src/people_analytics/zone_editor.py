@@ -31,6 +31,7 @@ import numpy as np
 import supervision as sv
 import yaml
 
+from people_analytics.analytics import theme
 from people_analytics.analytics.render import AQUA, BLUE, MAGENTA, ORANGE, YELLOW, pill
 
 KIND_KEYS = {"zone": "zones", "queue": "queues", "staff": "staff"}
@@ -39,7 +40,7 @@ QUEUE_DEFAULTS = {"anchor": "bottom_center", "max_speed": 0.5, "min_visit_s": 3.
 STAFF_DEFAULTS = {"anchor": "center", "alert_after_s": 120, "min_waiting": 1,
                   "back_after_s": 1.0, "repeat_after_s": 300}
 ZONE_COLOURS = [BLUE, MAGENTA, YELLOW]
-_DARK = sv.Color(r=30, g=30, b=30)  # help-text label background
+_DARK = sv.Color.from_hex(theme.SURFACE)
 
 
 @dataclass
@@ -293,9 +294,9 @@ class Editor:
             pill(img, f"{sh.kind}: {sh.name}", (int(c[0]), int(c[1])), col, size=20)
         if self.mode in ("draw", "name") and self.points:
             pts = np.array(self.points + ([self.mouse] if self.mode == "draw" else []), np.int32)
-            cv2.polylines(img, [pts], self.mode == "name", (0, 255, 255), 2, cv2.LINE_AA)
+            cv2.polylines(img, [pts], self.mode == "name", theme.bgr(theme.CYAN), 2, cv2.LINE_AA)
             for p in self.points:
-                cv2.circle(img, p, 6, (0, 255, 255), -1, cv2.LINE_AA)
+                cv2.circle(img, p, 6, theme.bgr(theme.CYAN), -1, cv2.LINE_AA)
         view = cv2.resize(img, None, fx=self.scale, fy=self.scale, interpolation=cv2.INTER_AREA)
         lines = list(HELP) if self.help else []
         if self.mode == "name":

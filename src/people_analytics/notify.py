@@ -70,6 +70,5 @@ def alert_text(site: str, message: str, clip_time_s: float, source: str) -> tupl
     body = (f"{message}\n\n"
             f"Site: {site}\n"
             f"Camera: {source}\n"
-            f"Video time: {m:02d}:{s:02d}\n\n"
-            f"Sent automatically by the people-analytics counter monitor.")
+            f"Video time: {m:02d}:{s:02d}\n")
     return subject, body

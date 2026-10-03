@@ -1,14 +1,14 @@
-# ~55 s demo, cafe camera only: `people-analytics demo-video`.
+# 43 s demo, cafe camera only: `people-analytics demo-video`.
 # Every shot <= 15 s and captioned (most viewers watch muted). All numbers on
-# screen come from this repo's runs: live counts from the run exports, the
-# results card from metrics/*.json.
+# screen come from this repo's saved run exports.
 # Video: MEVA dataset (mevadata.org), CC BY 4.0
 
 out: "outputs/meva/demo/meva_demo.mp4"
 thumbnail: "outputs/meva/demo/thumbnail.png"
-thumbnail_at: [1, 10.5]    # [shot index, seconds into it]: the alert banner
-author: "Salman Majeed"
+thumbnail_at: [1, 10.0]    # [shot index, seconds into it]: 2:31, counter empty, 3 queueing
+thumbnail_style: "portfolio"
 fps: 30
+transitions: cut  # Keep the application visible between pages.
 
 shots:
   - kind: scene
@@ -34,20 +34,10 @@ shots:
     seconds: 7
     config: "configs/meva_cafe.yaml"
     overrides: {"staff.alert_after_s": 1.5, "staff.back_after_s": 0.5}
-    caption: "The manager gets an email"
-    sub: "Sent through any ordinary email account (SMTP): no paid service needed"
 
   - kind: summary
-    seconds: 8
+    seconds: 7
     panels:
       - {config: "configs/meva_cafe.yaml", title: "Cafe"}
     caption: "End-of-clip summary"
     sub: "Visits per minute and average time per area, for the full 5-minute clip."
-
-  - kind: measured
-    seconds: 6
-    items: [cafe_idsw]
-
-  - kind: end
-    seconds: 6
-    title: ["Queues, dwell time and staff alerts", "with occlusion-robust tracking"]

@@ -44,35 +44,44 @@ reid_gallery:
 # (outputs/meva/phase2/feet_cafe.jpg). Furniture differs between days, so each
 # demo clip gets its own geometry; no tracking outcome was used to place them.
 zones:
-  - name: "lounge"            # sofas and armchairs, back left
-    polygon: [[90, 290], [560, 290], [560, 520], [120, 520]]
-  - name: "tables"            # the small round tables in the middle
-    polygon: [[580, 380], [1000, 380], [1000, 640], [600, 640]]
-  - name: "coffee station"    # high tables with cups and milk, front right
-    polygon: [[1350, 560], [1920, 560], [1920, 1072], [1450, 1072]]
+  - name: "lounge"
+    polygon: [[120, 343], [500, 289], [574, 434], [143, 529]]
+  - name: "tables"
+    polygon: [[350, 496], [868, 400], [1060, 602], [388, 742]]
+  - name: "coffee station"
+    polygon: [[1690, 598], [1924, 685], [1519, 1082], [1045, 923]]
+
+
+
+
 
 queues:
-  # Floor in front of the counter (left edge), following the line as it snakes
-  # up and to the right towards the doors. People walking through it are
-  # excluded by speed, not by shape.
   - name: "counter queue"
-    polygon: [[360, 760], [1000, 640], [1350, 640], [1350, 830], [1000, 1072], [360, 1072]]
+    polygon: [[320, 804], [697, 730], [1252, 574], [1541, 665], [736, 1069], [392, 1067]]
     anchor: "bottom_center"
     max_speed: 0.5
     min_visit_s: 3.0
     recent: 10
 
+
+
+
+
 # Behind the counter, where the server stands (box centre: the counter hides
 # their legs). Provisional: redraw with `people-analytics zone-editor`.
 staff:
   name: "behind the counter"
-  polygon: [[0, 560], [160, 560], [280, 1072], [0, 1072]]
+  polygon: [[-1, 706], [173, 676], [280, 1072], [0, 1072]]
   anchor: "center"
   queue: "counter queue"
-  alert_after_s: 120      # alert after 2 minutes with no one at the counter...
-  min_waiting: 1          # ...while at least this many people are waiting
+  alert_after_s: 120
+  min_waiting: 1
   back_after_s: 1.0
   repeat_after_s: 300
+
+
+
+
 
 # Alerts are always written to outbox_dir as .eml files. To email them too, set
 # enabled: true, fill in the addresses, and put an app password in the

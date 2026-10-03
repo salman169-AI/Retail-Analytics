@@ -15,6 +15,7 @@ from __future__ import annotations
 import csv
 import subprocess
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
 
 import cv2
@@ -32,15 +33,13 @@ from people_analytics.analytics.render import (
     draw_queue,
     draw_staff,
     draw_zones,
-    pill,
     zone_color,
 )
 from people_analytics.analytics.staff import StaffMonitor, build_staff_monitor, waiting_count
+from people_analytics.analytics.theme import CREDIT, INK, SURFACE, bgr
 from people_analytics.config import Config
 
-CREDIT = "Video: MEVA dataset (mevadata.org), CC BY 4.0"
-BOX = (235, 235, 235)
-WHITE = sv.Color(r=235, g=235, b=235)
+BOX = bgr(INK)
 
 
 def _load(cfg: Config) -> tuple[dict, list[dict], float, int]:
@@ -150,6 +149,7 @@ def iter_scene(
     panel_size: tuple[int, int] = (640, 1080),
     panel_every_s: float = 0.5,
     highlight: set[int] | None = None,
+    panel_renderer: Callable[[PanelState, tuple[int, int]], np.ndarray] = render_panel,
 ):
     """Yield (annotated frame, panel image, frame number) for a cut of the scene.
 
@@ -205,9 +205,6 @@ def iter_scene(
             bgr = col.as_bgr() if col is not None else BOX
             cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), bgr,
                           2 if col is not None else 1, cv2.LINE_AA)
-            if cfg.analytics.show_labels:
-                pill(frame, f"#{gid}", (int(x1), int(y1) - 2), col or WHITE, size=17,
-                     align="left")
 
         # Areas and their labels go on top of the people, so no box crosses a label.
         counts = {n: sum(1 for _, _, zs in rows if n in zs) for n, _, _ in zone_shapes}
@@ -230,7 +227,7 @@ def iter_scene(
                 img = draw_alert_banner(img, alert_text, resolved)
         if f / fps - panel_at >= panel_every_s:
             q = queues[0][1] if queues else None
-            panel = render_panel(stats.state(f, q, staff), panel_size)
+            panel = panel_renderer(stats.state(f, q, staff), panel_size)
             panel_at = f / fps
         for _ in range(repeat):
             yield img, panel, f
@@ -241,7 +238,7 @@ def _pad_to(img: np.ndarray, h: int) -> np.ndarray:
     if img.shape[0] >= h:
         return img[:h]
     return cv2.copyMakeBorder(img, 0, h - img.shape[0], 0, 0, cv2.BORDER_CONSTANT,
-                              value=(25, 26, 26))
+                              value=bgr(SURFACE))
 
 
 class FFmpegWriter:

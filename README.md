@@ -9,10 +9,12 @@ because every count and dwell time depends on that.
 
 **Video: MEVA dataset (mevadata.org), CC BY 4.0**
 
-![Cafe: queue, counter status and an unattended-counter alert](outputs/portfolio/meva_thumbnail.jpg)
+![Retail analytics: queues, dwell time and staff alerts](outputs/portfolio/meva_thumbnail.jpg)
 
-The 56-second demo video (café camera) is built by `people-analytics demo-video`
-(`outputs/meva/demo/meva_demo.mp4`, not tracked in git).
+The 43-second demo video (café camera) is built by `people-analytics demo-video`
+(`outputs/meva/demo/meva_demo.mp4`, not tracked in git). The video presents a
+web-style monitoring workspace: camera playback, KPI cards, charts, a recorded
+activity feed and a notification inbox. It is labelled as replay throughout.
 
 | Café: queue and time per area | The alert email |
 |---|---|
@@ -194,4 +196,8 @@ ONNX/TensorRT edge export) behind the same `people-analytics` CLI.
   for Activity Detection*, WACV 2021. All actors signed consent forms.
 - **Code**: MIT, see [`LICENSE`](LICENSE). Detection uses Ultralytics YOLO (AGPL-3.0),
   which is fine for this open demo but matters if the code is ever closed-source.
-- **Fonts**: DejaVu Sans (free licence), bundled with matplotlib.
+- **Fonts**: IBM Plex Sans Regular and SemiBold, bundled under the
+  [SIL Open Font License 1.1](src/people_analytics/assets/fonts/OFL.txt).
+  The video uses a light workspace with forest-green navigation, white cards
+  and teal charts. Dark camera labels, orange queue highlights and red alerts
+  keep monitoring states distinct.
