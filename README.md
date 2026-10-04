@@ -1,4 +1,4 @@
-# People Counting, Dwell Time & Heatmaps with Occlusion-Robust Tracking
+# AI Powered Retail Analytics System
 
 Footfall analytics for any venue (shop, café, mall entrance, campus), shown on the
 public MEVA surveillance dataset: a café queue with wait estimate and time per area,
